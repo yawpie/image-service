@@ -1,5 +1,4 @@
 import multer from "multer";
-import path from "path";
 import { Request } from "express";
 import { generateDestination, generateFilename } from "../utils/storage";
 import dotenv from "dotenv";
@@ -22,7 +21,7 @@ const storage = multer.diskStorage({
 
 function fileFilter(req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
   if (!ALLOWED.includes(file.mimetype)) {
-    return cb(new Error("File type not allowed"));
+    return cb(null,false);
   }
   cb(null, true);
 }
