@@ -5,6 +5,8 @@ import path from "path";
 import dotenv from "dotenv";
 import imagesRouter from "./routes/images";
 import { upload } from "./middleware/upload";
+import { apiKeyAuth } from "./middleware/apiKeyAuth";
+import generateApiKey from "./routes/generate";
 
 dotenv.config();
 
@@ -18,8 +20,9 @@ app.use(express.json());
 
 app.use(`/${UPLOAD_DIR}`, express.static(path.join(process.cwd(), UPLOAD_DIR)));
 
-app.post("/images", upload.single("image"), imagesRouter);
-app.use("/images", imagesRouter);
+app.post("/images", apiKeyAuth, upload.single("image"), imagesRouter);
+app.use("/images", apiKeyAuth, imagesRouter);
+app.use("/generate", generateApiKey);
 
 app.get("/", (req, res) => res.send("Image Service OK"));
 

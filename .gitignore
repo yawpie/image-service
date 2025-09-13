@@ -63,4 +63,3 @@ dist/
 .env
 uploads/
 .prisma/
-prisma/migrations/

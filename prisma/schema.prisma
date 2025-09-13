@@ -7,7 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Image {
+model image {
   id           String   @id @default(uuid())
   originalName String
   fileName     String
@@ -18,4 +18,15 @@ model Image {
   createdAt    DateTime @default(now())
 
   @@index([createdAt])
+}
+
+model apikey {
+  id          String   @id @default(cuid())
+  keyHash     String
+  serviceName String
+  adminId     String?  // TODO: buat relasi ke database utama
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime?
 }

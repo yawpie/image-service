@@ -1,16 +1,16 @@
 import express from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../lib/prisma";
 import path from "path";
 import fs from "fs";
 
-const prisma = new PrismaClient();
+
 const router = express.Router();
 const HOST = process.env.HOST || "http://localhost:4000";
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "uploads";
 
 router.post("/", async (req: any, res) => {
   const file = req.file;
-  if (!file) return res.status(400).json({ error: "file is required" });
+  if (!file) return res.status(400).json({ error: "check the image, it might be unsupported file type, or you haven't uploaded a file" });
 
   const relativePath = path.relative(process.cwd(), file.path).replace(/\\/g, "/");
   const url = `${HOST}/${relativePath}`;
@@ -28,7 +28,9 @@ router.post("/", async (req: any, res) => {
     });
     return res.status(201).json(img);
   } catch (err) {
-    try { fs.unlinkSync(file.path); } catch (e) {}
+    try { fs.unlinkSync(file.path); } catch (e) {
+      console.error("File delete error:", e);
+    }
     console.error("DB insert error:", err);
     return res.status(500).json({ error: "internal server error" });
   }
