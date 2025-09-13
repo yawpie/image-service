@@ -14,7 +14,7 @@ model image {
   mimeType     String
   size         Int
   path         String
-  url          String
+  url          String @unique
   createdAt    DateTime @default(now())
 
   @@index([createdAt])
