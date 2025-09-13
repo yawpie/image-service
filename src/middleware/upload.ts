@@ -11,7 +11,8 @@ const ALLOWED = (process.env.ALLOWED_MIME || "image/jpeg,image/png").split(",");
 
 const storage = multer.diskStorage({
   destination: (req: Request, file: Express.Multer.File, cb) => {
-    const dest = generateDestination(UPLOAD_DIR);
+    const { folder } = req.query as { folder?: string };
+    const dest = generateDestination(UPLOAD_DIR + (folder ? `/${folder}` : "/default"));
     cb(null, dest);
   },
   filename: (req: Request, file: Express.Multer.File, cb) => {

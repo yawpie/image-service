@@ -9,6 +9,7 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || "uploads";
 
 router.post("/", async (req: any, res) => {
   const file = req.file;
+  const { folder } = req.query as { folder?: string };
   if (!file)
     return res.status(400).json({
       error:
