@@ -12,13 +12,13 @@ ENV CI=true
 COPY package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY prisma ./prisma
-# Generate Prisma Client for linux-musl (alpine)
 RUN npx prisma generate
 
 # 3) Build TypeScript using dev deps
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps_dev /app/node_modules ./node_modules
+COPY package*.json ./
 COPY tsconfig.json ./tsconfig.json
 COPY src ./src
 RUN npm run build
@@ -26,6 +26,7 @@ RUN npm run build
 # 4) Prod deps (pruned)
 FROM base AS deps_prod
 WORKDIR /app
+COPY package*.json ./
 COPY --from=deps_dev /app/node_modules ./node_modules
 RUN npm prune --omit=dev --no-audit --no-fund
 
@@ -34,20 +35,14 @@ FROM node:${NODE_VERSION} AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Use the existing 'node' user that comes with the Node image.
-# Prepare writable dirs and set ownership.
 RUN mkdir -p /app/uploads && chown -R node:node /app
 
-# Copy pruned node_modules and built app
 COPY --chown=node:node --from=deps_prod /app/node_modules ./node_modules
 COPY --chown=node:node --from=builder  /app/dist        ./dist
 COPY --chown=node:node package*.json ./
-# Optional: copy prisma dir if you run migrations at startup
 COPY --chown=node:node prisma ./prisma
 
 USER node
-
 ENV PORT=4000
 EXPOSE 4000
-
 CMD ["node", "dist/index.js"]
