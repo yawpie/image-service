@@ -1,0 +1,36 @@
+# Node & build artifacts
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+
+# Typescript build output (built inside Docker)
+dist
+
+# Local environment & secrets
+.env
+.env.*
+
+# VCS
+.git
+.gitignore
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.vscode
+
+# Prisma artifacts (will be generated in container)
+prisma/generated
+
+# Uploads content (use volume, avoid sending large blobs)
+uploads/*
+!uploads/.gitkeep
+
+# Docker
+Dockerfile.old
+
+# Misc
+coverage
