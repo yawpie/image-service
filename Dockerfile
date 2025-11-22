@@ -1,5 +1,5 @@
 # Multi-stage production build for Node.js + TypeScript + Prisma
-ARG NODE_VERSION=20-alpine
+ARG NODE_VERSION=20-slim
 
 # 1) Base (common packages for Prisma on Alpine)
 FROM node:${NODE_VERSION} AS base
