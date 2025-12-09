@@ -1,14 +1,19 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import path from "path";
 import fs from "fs";
+import { upload } from "../middleware/upload";
 
 const router = express.Router();
 const HOST = process.env.HOST || "http://localhost:4000";
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "uploads";
 
-router.post("/", async (req: any, res) => {
+router.post("/", async (req: Request, res: Response) => {
   const file = req.file;
+  if (process.env.NODE_ENV === "development" || process.env.DEBUG === "true") {
+    console.log("Uploaded file:", file);
+  }
+  
   const { folder } = req.query as { folder?: string };
   if (!file)
     return res.status(400).json({
@@ -51,24 +56,6 @@ router.get("/:id", async (req, res) => {
   return res.json(img);
 });
 
-// router.delete("/:id", async (req, res) => {
-//   const { id } = req.params;
-//   const img = await prisma.image.findUnique({ where: { id } });
-//   if (!img) return res.status(404).json({ error: "not found" });
-
-//   try {
-//     await prisma.image.delete({ where: { id } });
-//     const filePath = path.join(process.cwd(), img.path);
-//     try {
-//       fs.unlinkSync(filePath);
-//     } catch (e) {}
-//     return res.json({ ok: true });
-//   } catch (err) {
-//     console.error("delete error", err);
-//     return res.status(500).json({ error: "internal server error" });
-//   }
-// });
-
 router.delete("/", async (req, res) => {
   const { url } = req.query;
   if (typeof url !== "string") {
@@ -76,9 +63,6 @@ router.delete("/", async (req, res) => {
   }
 
   try {
-    // if (!url.startsWith(`http://`) && !url.startsWith(`https://`)) {
-    //   return res.status(400).json({ error: "invalid url format" });
-    // } else
     if (!url) {
       return res.status(400).json({ error: "url is required" });
     }
