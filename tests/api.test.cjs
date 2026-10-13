@@ -85,6 +85,25 @@ test('CORS preflight accepts configured dashboard origin with credentials', asyn
   assert.equal(res.headers.get('access-control-allow-credentials'), 'true');
 });
 
+test('CORS preflight accepts built-in school development origin even with CORS_ORIGIN set', async () => {
+  const res = await request('/images', {
+    method: 'OPTIONS',
+    headers: {
+      origin: 'https://landing.dev.smkn4mtr.sch.id',
+      'access-control-request-method': 'POST',
+      'access-control-request-headers': 'content-type,x-api-key',
+    },
+  });
+  assert.equal(res.status, 204);
+  assert.equal(res.headers.get('access-control-allow-origin'), 'https://landing.dev.smkn4mtr.sch.id');
+  assert.equal(res.headers.get('access-control-allow-credentials'), 'true');
+});
+
+test('static images do not expose an unrelated STATIC_ORIGIN', async () => {
+  const res = await request('/', { headers: { origin: 'https://landing.dev.smkn4mtr.sch.id' } });
+  assert.equal(res.headers.get('access-control-allow-origin'), 'https://landing.dev.smkn4mtr.sch.id');
+});
+
 test('CORS does not grant access to unconfigured origins', async () => {
   const res = await request('/', { headers: { origin: 'https://untrusted.test' } });
   assert.equal(res.headers.get('access-control-allow-origin'), null);
@@ -127,7 +146,7 @@ for (const [label, route, folder] of [['default folder', '/images', 'default'], 
     const download = await request(`/${persisted.path}`, { headers: { 'x-api-key': '' } });
     assert.equal(download.status, 200);
     assert.equal(download.headers.get('content-type'), 'image/png');
-    assert.equal(download.headers.get('access-control-allow-origin'), 'https://dashboard.test');
+    assert.equal(download.headers.get('access-control-allow-origin'), null);
     assert.equal(download.headers.get('access-control-allow-credentials'), 'true');
     assert.deepEqual(Buffer.from(await download.arrayBuffer()), png);
   });
