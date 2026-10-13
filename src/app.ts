@@ -9,6 +9,7 @@ import { upload } from "./middleware/upload";
 import { apiKeyAuth } from "./middleware/apiKeyAuth";
 import generateApiKey from "./routes/generate";
 import logger from "./utils/logger";
+import { resolveCorsOrigins } from "./utils/corsOrigins";
 
 dotenv.config();
 
@@ -36,7 +37,7 @@ app.use(helmet({
 
 app.use(
   cors({
-    origin: JSON.parse(process.env.CORS_ORIGIN || '[]'),
+    origin: resolveCorsOrigins(process.env.CORS_ORIGIN),
     credentials: true
   })
 );
@@ -46,12 +47,7 @@ app.use(express.json());
 // ─── Static Files ───────────────────────────────────────────────────────────
 
 app.use(`/${UPLOAD_DIR}`, express.static(path.join(process.cwd(), UPLOAD_DIR), {
-  setHeaders: (res) => {
-    if (process.env.STATIC_ORIGIN) {
-      res.setHeader("Access-Control-Allow-Origin", process.env.STATIC_ORIGIN);
-      res.setHeader("Access-Control-Allow-Credentials", "true");
-    }
-  }
+  // The global CORS middleware already applies the allowlist to static files.
 }));
 
 // ─── Routes ─────────────────────────────────────────────────────────────────
