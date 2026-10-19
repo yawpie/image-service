@@ -5,7 +5,7 @@ const { apiKeyAuth } = load('middleware/apiKeyAuth');
 const crypto = load('utils/apiKey');
 const { createApiKey } = load('services/apiKeyService');
 const { validateAdminId } = load('utils/checkAdminId');
-const adminId = '11111111-1111-4111-8111-111111111111';
+const adminId = 'a1111111-1111-4111-8111-111111111111';
 after(cleanup);
 afterEach(() => mock.restoreAll());
 
@@ -77,12 +77,12 @@ test('API key service replaces same-admin keys inside one transaction and stores
   const tx = {
     $executeRaw: async () => calls.push('lock'),
     apikey: {
-      deleteMany: async ({ where }) => { calls.push('delete'); assert.deepEqual(where, { adminId }); },
+      deleteMany: async ({ where }) => { calls.push('delete'); assert.deepEqual(where, { adminId: { equals: adminId, mode: 'insensitive' } }); },
       create: async ({ data }) => { calls.push('create'); stored.push(data); return { id: 'key-1', ...data }; },
     },
   };
   mock.method(prisma, '$transaction', async (fn) => fn(tx));
-  const result = await createApiKey('dashboard', adminId);
+  const result = await createApiKey('dashboard', adminId.toUpperCase());
   assert.equal(result.rawKey, 'raw-key');
   assert.equal(stored.length, 1);
   assert.deepEqual(stored[0], { keyHash: 'hashed-key', serviceName: 'dashboard', adminId });

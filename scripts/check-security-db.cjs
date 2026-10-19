@@ -26,7 +26,7 @@ function runChecks() {
   const { createApiKey } = require('../dist/services/apiKeyService');
   const { validateAdminId } = require('../dist/utils/checkAdminId');
   const { verifyApiKey, hashApiKey } = require('../dist/utils/apiKey');
-  const adminId = randomUUID();
+  const adminId = 'a' + randomUUID().slice(1);
   const otherAdminId = randomUUID();
   const constraint = `security_check_${adminId.replaceAll('-', '')}`;
   const image = new Client({ connectionString: process.env.DATABASE_URL });
@@ -41,7 +41,7 @@ function runChecks() {
     await admin.connect(); connectedAdmin = true;
     await admin.query('INSERT INTO admin (admin_id, username, hashed_password, is_active) VALUES ($1, $2, $3, true)', [adminId, `security-check-${adminId}`, 'synthetic-unusable-password']);
     previousHash = await hashApiKey('synthetic-previous-key');
-    await prisma.apikey.create({ data: { adminId, serviceName: 'security-check-previous', keyHash: previousHash } });
+    await prisma.apikey.create({ data: { adminId: adminId.toUpperCase(), serviceName: 'security-check-previous', keyHash: previousHash } });
     await prisma.apikey.create({ data: { adminId: otherAdminId, serviceName: 'security-check-unrelated', keyHash: previousHash } });
     // Only this synthetic admin/service combination fails; no existing rows are validated or changed.
     await image.query(`ALTER TABLE apikey ADD CONSTRAINT "${constraint}" CHECK ("adminId" IS DISTINCT FROM '${adminId}' OR "serviceName" <> 'security-check-reject') NOT VALID`);
@@ -51,7 +51,7 @@ function runChecks() {
   after(async () => {
     try {
       if (constraintCreated) await image.query(`ALTER TABLE apikey DROP CONSTRAINT "${constraint}"`);
-      if (connectedImage) await prisma.apikey.deleteMany({ where: { adminId: { in: [adminId, otherAdminId] } } });
+      if (connectedImage) await prisma.apikey.deleteMany({ where: { adminId: { in: [adminId, adminId.toUpperCase(), otherAdminId] } } });
       if (connectedAdmin) await admin.query('DELETE FROM admin WHERE admin_id = $1', [adminId]);
     } finally {
       await prisma.$disconnect();
@@ -70,17 +70,18 @@ function runChecks() {
 
   test('real PostgreSQL insert failure rolls back key replacement', async () => {
     await assert.rejects(createApiKey('security-check-reject', adminId));
-    const rows = await prisma.apikey.findMany({ where: { adminId } });
+    const rows = await prisma.apikey.findMany({ where: { adminId: { equals: adminId, mode: 'insensitive' } } });
     assert.equal(rows.length, 1, 'failed rotation must preserve previous record');
     assert.equal(rows[0].keyHash, previousHash);
     assert.equal(await verifyApiKey('synthetic-previous-key', rows[0].keyHash), true);
   });
 
   test('real PostgreSQL concurrent rotations leave exactly one live replacement', async () => {
-    const results = await Promise.all([createApiKey('security-check-first', adminId), createApiKey('security-check-second', adminId)]);
-    const rows = await prisma.apikey.findMany({ where: { adminId } });
+    const results = await Promise.all([createApiKey('security-check-first', adminId.toUpperCase()), createApiKey('security-check-second', adminId)]);
+    const rows = await prisma.apikey.findMany({ where: { adminId: { equals: adminId, mode: 'insensitive' } } });
     assert.equal(rows.length, 1, 'concurrent rotations must replace previous keys');
     assert.equal(rows[0].isActive, true);
+    assert.equal(rows[0].adminId, adminId, 'stored UUID must be canonical lowercase');
     assert.equal(await verifyApiKey('synthetic-previous-key', rows[0].keyHash), false);
     const matches = await Promise.all(results.map(({ rawKey }) => verifyApiKey(rawKey, rows[0].keyHash)));
     assert.equal(matches.filter(Boolean).length, 1);
