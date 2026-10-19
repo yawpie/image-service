@@ -1,37 +1,22 @@
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 import { verifyApiKey } from "../utils/apiKey";
-import { handlePrismaNotFound } from "../utils/handleNotFound";
-import { sendError } from "../utils/send";
+import logger from "../utils/logger";
 
-export async function apiKeyAuth(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
+export async function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
+  const apiKey = req.header("x-api-key");
+  if (!apiKey) return res.status(401).json({ message: "API key missing" });
+
   try {
-    const apiKey = req.header("x-api-key");
-
-    if (!apiKey) {
-      return res.status(401).json({ message: "API key missing" });
-    }
-
-    const keys = await handlePrismaNotFound(() =>
-      prisma.apikey.findMany({
-        where: { isActive: true },
-      })
-    );
-
+    const keys = await prisma.apikey.findMany({ where: { isActive: true } });
     for (const key of keys) {
-      const isValid = await verifyApiKey(apiKey, key.keyHash);
-      if (isValid) {
-        (req as any).apiKeyOwner = key; // bisa dipakai di route
+      if (key.isActive && (!key.expiresAt || key.expiresAt.getTime() > Date.now()) && await verifyApiKey(apiKey, key.keyHash)) {
         return next();
       }
     }
-  } catch (error) {
-    // return res.json({ error });
-    sendError(res, error);
-    return;
+    return res.status(401).json({ message: "Invalid API key" });
+  } catch {
+    logger.error("image.auth.failed");
+    return res.status(500).json({ message: "An unexpected error occurred" });
   }
 }

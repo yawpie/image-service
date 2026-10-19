@@ -14,6 +14,8 @@ Object.assign(process.env, {
   ADMIN_DATABASE_URL: 'postgresql://test:test@127.0.0.1:1/test',
   UPLOAD_DIR: 'uploads',
   MAX_FILE_SIZE: '1024',
+  MAX_IMAGE_PIXELS: '16',
+  IMAGE_SERVICE_PROVISIONING_KEY: 'fixture-provisioning-key',
   ALLOWED_MIME: 'image/jpeg,image/png,image/webp,image/pjpeg',
   HOST: 'https://images.test',
   CORS_ORIGIN: '["https://dashboard.test"]',
@@ -30,6 +32,7 @@ function replaceModule(id, exports) {
 
 const unexpected = async () => { throw new Error('Unexpected database call'); };
 const prisma = {
+  $transaction: unexpected,
   image: { create: unexpected, findUnique: unexpected, delete: unexpected },
   apikey: { create: unexpected, findMany: unexpected, count: unexpected, deleteMany: unexpected },
 };
@@ -38,7 +41,7 @@ replaceModule(require.resolve('../dist/utils/logger'), {
   __esModule: true,
   default: { info() {}, error() {} },
 });
-const pg = { Pool: function () { throw new Error('Unexpected admin database call'); } };
+const pg = { Client: function () { throw new Error('Unexpected admin database call'); }, Pool: function () { throw new Error('Unexpected admin database call'); } };
 replaceModule(require.resolve('pg'), pg);
 
 function response() {
@@ -60,3 +63,4 @@ function cleanup() {
 }
 
 module.exports = { load, prisma, pg, response, workspace, cleanup };
+

@@ -6,7 +6,7 @@ const { test, before, after, afterEach, mock } = require('node:test');
 const { load, prisma, workspace, cleanup } = require('./support.cjs');
 const { hashApiKey } = load('utils/apiKey');
 const admin = load('utils/checkAdminId');
-const duplicate = load('utils/duplicateApiKey');
+const adminId = '11111111-1111-4111-8111-111111111111';
 const keyService = load('services/apiKeyService');
 const app = load('app').default;
 
@@ -317,86 +317,80 @@ for (const operation of ['findUnique', 'delete']) {
   });
 }
 
-async function generate(body, query = '') {
+async function generate(body, query = '', headers = {}) {
   return request(`/generate${query}`, {
-    method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' },
+    method: 'POST', body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json', 'x-provisioning-key': 'fixture-provisioning-key', ...headers },
   });
 }
 
-for (const [body, error] of [[{}, 'adminId is required'], [{ adminId: 'admin-1' }, 'serviceName is required']]) {
-  test(`generate validates required fields: ${error}`, async () => {
+for (const [label, key] of [['anonymous', ''], ['wrong same length', 'wrong--provisioning-key'], ['short key', 'x'], ['long key', 'x'.repeat(128)]]) {
+  test(`generate rejects ${label} before admin lookup or key mutation`, async () => {
+    const validate = mock.method(admin, 'validateAdminId', async () => true);
+    const create = mock.method(keyService, 'createApiKey', async () => ({ rawKey: 'secret' }));
+    const res = await generate({ adminId, serviceName: 'dashboard' }, '', { 'x-provisioning-key': key });
+    assert.equal(res.status, 401);
+    assert.equal(validate.mock.callCount(), 0);
+    assert.equal(create.mock.callCount(), 0);
+    assert.doesNotMatch(JSON.stringify(await res.json()), /secret|fixture-provisioning-key/);
+  });
+}
+
+for (const config of [undefined, '', '   ']) {
+  test(`generate fails closed for provisioning config ${JSON.stringify(config)}`, async () => {
+    const previous = process.env.IMAGE_SERVICE_PROVISIONING_KEY;
+    if (config === undefined) delete process.env.IMAGE_SERVICE_PROVISIONING_KEY;
+    else process.env.IMAGE_SERVICE_PROVISIONING_KEY = config;
+    const validate = mock.method(admin, 'validateAdminId', async () => true);
+    const create = mock.method(keyService, 'createApiKey', async () => ({ rawKey: 'secret' }));
+    try {
+      const res = await generate({ adminId, serviceName: 'dashboard' });
+      assert.equal(res.status, 503);
+      assert.equal(validate.mock.callCount(), 0);
+      assert.equal(create.mock.callCount(), 0);
+    } finally { process.env.IMAGE_SERVICE_PROVISIONING_KEY = previous; }
+  });
+}
+
+for (const body of [null, [], {}, { adminId }, { adminId: 'not-a-uuid', serviceName: 'dashboard' }, { adminId: {}, serviceName: 'dashboard' },
+  { adminId, serviceName: '' }, { adminId, serviceName: '   ' }, { adminId, serviceName: [] }, { adminId, serviceName: 'x'.repeat(256) }]) {
+  test(`generate validates body ${JSON.stringify(body)}`, async () => {
     const validate = mock.method(admin, 'validateAdminId', async () => true);
     const res = await generate(body);
     assert.equal(res.status, 400);
-    assert.deepEqual(await res.json(), { error });
     assert.equal(validate.mock.callCount(), 0);
+    assert.doesNotMatch(JSON.stringify(await res.json()), /TypeError|stack|fixture-provisioning-key/);
   });
 }
 
-test('generate denies unknown admin without creating key', async () => {
+test('generate denies unknown or inactive admin without creating key', async () => {
   mock.method(admin, 'validateAdminId', async () => false);
   const create = mock.method(keyService, 'createApiKey', async () => {});
-  const res = await generate({ adminId: 'unknown', serviceName: 'dashboard' });
+  const res = await generate({ adminId, serviceName: 'dashboard' });
   assert.equal(res.status, 403);
   assert.deepEqual(await res.json(), { error: 'Forbidden' });
   assert.equal(create.mock.callCount(), 0);
 });
 
-for (const [query, verbose, isDuplicate] of [['', false, false], ['?verbose=true', true, true], ['?verbose=false', false, false]]) {
-  test(`generate creates key and handles rotation: ${query || 'default'}`, async () => {
-    const calls = [];
-    const record = { id: 'key-1', serviceName: 'dashboard' };
-    mock.method(admin, 'validateAdminId', async (id) => { calls.push(['validate', id]); return true; });
-    mock.method(duplicate, 'checkDuplicateKey', async (id) => { calls.push(['check', id]); return isDuplicate; });
-    mock.method(duplicate, 'deletePreviousKey', async (id) => { calls.push(['delete', id]); });
-    mock.method(keyService, 'createApiKey', async (...args) => {
-      calls.push(['create', ...args]);
-      return { rawKey: 'new-key', apiKey: record };
-    });
-    const res = await generate({ adminId: 'admin-1', serviceName: 'dashboard' }, query);
+for (const query of ['', '?verbose=true', '?verbose=false']) {
+  test(`generate accepts server header, trims service and never exposes record: ${query || 'default'}`, async () => {
+    mock.method(admin, 'validateAdminId', async (id) => id === adminId);
+    const create = mock.method(keyService, 'createApiKey', async () => ({ rawKey: 'new-key', apiKey: { keyHash: 'secret-hash' } }));
+    const res = await generate({ adminId, serviceName: '  dashboard  ' }, query);
     assert.equal(res.status, 201);
-    assert.deepEqual(await res.json(), {
-      message: 'success', key: 'new-key', ...(verbose ? { apiKey: record } : {}),
-    });
-    assert.deepEqual(calls, [
-      ['validate', 'admin-1'], ['check', 'admin-1'],
-      ...(isDuplicate ? [['delete', 'admin-1']] : []),
-      ['create', 'dashboard', 'admin-1'],
-    ]);
+    assert.deepEqual(await res.json(), { message: 'success', key: 'new-key' });
+    assert.deepEqual(create.mock.calls[0].arguments, ['dashboard', adminId]);
   });
 }
 
-for (const stage of ['validate', 'check', 'delete', 'create']) {
-  test(`generate handles ${stage} failure and stops subsequent work`, async () => {
-    mock.method(console, 'error', () => {});
-    const calls = [];
-    const step = (name, result) => async () => {
-      calls.push(name);
-      if (stage === name) throw new Error('Internal detail');
-      return result;
-    };
-    mock.method(admin, 'validateAdminId', step('validate', true));
-    mock.method(duplicate, 'checkDuplicateKey', step('check', true));
-    mock.method(duplicate, 'deletePreviousKey', step('delete'));
-    mock.method(keyService, 'createApiKey', step('create', { rawKey: 'key', apiKey: {} }));
-    const res = await generate({ adminId: 'admin-1', serviceName: 'dashboard' });
+for (const stage of ['validate', 'create']) {
+  test(`generate returns generic error without diagnostics on ${stage} failure`, async () => {
+    const log = mock.method(console, 'error', () => {});
+    mock.method(admin, 'validateAdminId', async () => { if (stage === 'validate') throw new Error('secret database url'); return true; });
+    mock.method(keyService, 'createApiKey', async () => { throw new Error('secret key hash'); });
+    const res = await generate({ adminId, serviceName: 'dashboard' });
     assert.equal(res.status, 500);
     assert.deepEqual(await res.json(), { error: 'internal server error' });
-    const steps = ['validate', 'check', 'delete', 'create'];
-    assert.deepEqual(calls, steps.slice(0, steps.indexOf(stage) + 1));
+    assert.equal(log.mock.callCount(), 0);
   });
 }
-
-test('global handler hides malformed JSON details in production', async () => {
-  const previous = process.env.NODE_ENV;
-  process.env.NODE_ENV = 'production';
-  try {
-    const res = await request('/generate', {
-      method: 'POST', body: '{bad json', headers: { 'content-type': 'application/json' },
-    });
-    assert.equal(res.status, 400);
-    assert.deepEqual(await res.json(), { error: 'Internal server error' });
-  } finally {
-    process.env.NODE_ENV = previous;
-  }
-});
