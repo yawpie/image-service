@@ -3,7 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { once } = require('node:events');
 const { test, before, after, afterEach, mock } = require('node:test');
-const { load, prisma, workspace, cleanup } = require('./support.cjs');
+const sharp = require('sharp');
+const { load, prisma, workspace, cleanup, logs } = require('./support.cjs');
 const { hashApiKey } = load('utils/apiKey');
 const admin = load('utils/checkAdminId');
 const adminId = '11111111-1111-4111-8111-111111111111';
@@ -13,17 +14,21 @@ const app = load('app').default;
 let server;
 let baseUrl;
 let keyHash;
-// A real 1x1 PNG; multipart tests exercise Multer and disk storage.
-const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHHsAAAAASUVORK5CYII=', 'base64');
+let png, jpeg, webp, tagged;
 
 before(async () => {
   fs.mkdirSync(path.join(workspace, 'uploads'));
+  const bitmap = sharp({ create: { width: 2, height: 2, channels: 3, background: '#4588bb' } });
+  png = await bitmap.clone().png().toBuffer();
+  jpeg = await bitmap.clone().jpeg().toBuffer();
+  webp = await bitmap.clone().webp().toBuffer();
+  tagged = await bitmap.clone().jpeg().withExif({ IFD0: { Copyright: 'sensitive fixture metadata' } }).toBuffer();
   keyHash = await hashApiKey('test-key');
   server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 });
-afterEach(() => mock.restoreAll());
+afterEach(() => { mock.restoreAll(); logs.length = 0; });
 after(async () => {
   try {
     if (server) await new Promise((resolve, reject) => {
@@ -137,57 +142,60 @@ for (const [label, route, folder] of [['default folder', '/images', 'default'], 
     assert.deepEqual(await res.json(), fakeImage(persisted));
     assert.equal(create.mock.callCount(), 1);
     assert.equal(persisted.originalName, 'photo.png');
-    assert.equal(persisted.mimeType, 'image/png');
-    assert.equal(persisted.size, png.length);
-    assert.match(persisted.fileName, /^[a-f0-9-]{36}\.png$/);
+    assert.equal(persisted.mimeType, 'image/webp');
+    assert.match(persisted.fileName, /^[a-f0-9-]{36}\.webp$/);
     assert.equal(persisted.path, `uploads/${folder}/${persisted.fileName}`);
     assert.equal(persisted.url, `https://images.test/${persisted.path}`);
-    assert.deepEqual(fs.readFileSync(path.join(workspace, persisted.path)), png);
+    const stored = fs.readFileSync(path.join(workspace, persisted.path));
+    const metadata = await sharp(stored).metadata();
+    assert.equal(metadata.format, 'webp');
+    assert.equal(metadata.width, 2);
+    assert.equal(metadata.height, 2);
+    assert.equal(persisted.size, stored.length);
     const download = await request(`/${persisted.path}`, { headers: { 'x-api-key': '' } });
     assert.equal(download.status, 200);
-    assert.equal(download.headers.get('content-type'), 'image/png');
+    assert.equal(download.headers.get('content-type'), 'image/webp');
     assert.equal(download.headers.get('access-control-allow-origin'), null);
     assert.equal(download.headers.get('access-control-allow-credentials'), 'true');
-    assert.deepEqual(Buffer.from(await download.arrayBuffer()), png);
+    assert.deepEqual(Buffer.from(await download.arrayBuffer()), stored);
   });
 }
 
-for (const [mime, extension] of [['image/jpeg', 'jpg'], ['image/webp', 'webp'], ['image/pjpeg', 'jpg']]) {
-  test(`upload accepts configured MIME ${mime}`, async () => {
+for (const [mime, extension] of [['image/jpeg', 'jpg'], ['image/webp', 'webp'], ['image/pjpeg', 'jpg'], ['image/jpg', 'jpg']]) {
+  test(`upload accepts supported MIME ${mime}`, async () => {
     authorize();
     mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
     const res = await request('/images', {
-      method: 'POST', body: multipart({ type: mime, name: `photo.${extension}` }),
+      method: 'POST', body: multipart({ type: mime, name: `photo.${extension}`, bytes: mime === 'image/webp' ? webp : jpeg }),
     });
     assert.equal(res.status, 201);
-    assert.equal((await res.json()).mimeType, mime);
+    assert.equal((await res.json()).mimeType, 'image/webp');
   });
 }
 
-for (const [label, body] of [['missing file', () => new FormData()], ['unsupported MIME', () => multipart({ type: 'text/plain', name: 'file.txt' })]]) {
+for (const [label, body, status] of [['missing file', () => new FormData(), 400], ['unsupported MIME', () => multipart({ type: 'text/plain', name: 'file.txt' }), 415]]) {
   test(`upload rejects ${label} without creating DB record or file`, async () => {
     authorize();
     const create = mock.method(prisma.image, 'create', async () => fakeImage());
     const beforeFiles = files();
     const res = await request('/images', { method: 'POST', body: body() });
-    assert.equal(res.status, 400);
-    assert.match((await res.json()).error, /unsupported file type/);
+    assert.equal(res.status, status);
+    assert.equal(typeof (await res.json()).error, 'string');
     assert.equal(create.mock.callCount(), 0);
     assert.deepEqual(files(), beforeFiles);
   });
 }
 
-for (const [label, input, message] of [
-  ['oversized file', { bytes: Buffer.alloc(1025) }, 'File too large'],
-  ['wrong multipart field', { field: 'file' }, 'Unexpected field'],
+for (const [label, input, status, message] of [
+  ['oversized file', { bytes: Buffer.alloc(1025) }, 413, 'File too large'],
+  ['wrong multipart field', { field: 'file' }, 400, 'Invalid multipart request'],
 ]) {
   test(`Multer rejects ${label} and leaves no partial files`, async () => {
     authorize();
     const create = mock.method(prisma.image, 'create', async () => fakeImage());
     const beforeFiles = files();
     const res = await request('/images', { method: 'POST', body: multipart(input) });
-    // Current global handler reports Multer errors as 500.
-    assert.equal(res.status, 500);
+    assert.equal(res.status, status);
     assert.deepEqual(await res.json(), { error: message });
     assert.equal(create.mock.callCount(), 0);
     assert.deepEqual(files(), beforeFiles);
@@ -221,7 +229,7 @@ test('upload still reports DB failure when file cleanup also fails', async () =>
   assert.deepEqual(await res.json(), { error: 'internal server error' });
 });
 
-test('upload must reject a folder escaping upload directory', { todo: 'folder query currently permits ../ traversal.' }, async () => {
+test('upload must reject a folder escaping upload directory', async () => {
   authorize();
   const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
   // The traversal stays inside the disposable test workspace.
@@ -394,3 +402,247 @@ for (const stage of ['validate', 'create']) {
     assert.equal(log.mock.callCount(), 0);
   });
 }
+
+for (const [label, bytes] of [
+  ['SVG disguised as PNG', () => Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><script>alert(1)</script></svg>')],
+  ['HTML disguised as PNG', () => Buffer.from('<html><script>alert(1)</script></html>')],
+  ['fake bitmap', () => Buffer.from('not an image')],
+  ['corrupt bitmap', () => { const corrupt = Buffer.from(png); corrupt[corrupt.length - 20] ^= 255; return corrupt; }],
+  ['truncated JPEG', () => jpeg.subarray(0, jpeg.length - 30)],
+  ['truncated PNG', () => png.subarray(0, 45)],
+  ['excessive pixels', () => sharp({ create: { width: 5, height: 5, channels: 3, background: '#ffffff' } }).png().toBuffer()],
+]) {
+  test(`upload rejects ${label} before creating files or rows`, async () => {
+    authorize();
+    const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+    const beforeFiles = files();
+    const res = await request('/images', { method: 'POST', body: multipart({ bytes: await bytes() }) });
+    assert.equal(res.status, 415);
+    assert.deepEqual(await res.json(), { error: 'Invalid or unsupported image' });
+    assert.equal(create.mock.callCount(), 0);
+    assert.deepEqual(files(), beforeFiles);
+  });
+}
+
+test('upload discards original extension and extra metadata from a real decoded bitmap', async () => {
+  authorize();
+  mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+  const res = await request('/images', { method: 'POST', body: multipart({ bytes: tagged, type: 'image/jpeg', name: '<script>alert(1)</script>.html' }) });
+  assert.equal(res.status, 201);
+  assert.match(res.headers.get('content-type'), /^application\/json/);
+  const image = await res.json();
+  assert.match(image.fileName, /^[a-f0-9-]{36}\.webp$/);
+  assert.equal(image.mimeType, 'image/webp');
+  const stored = fs.readFileSync(path.join(workspace, image.path));
+  const metadata = await sharp(stored).metadata();
+  assert.equal(metadata.format, 'webp');
+  for (const field of ['exif', 'icc', 'xmp', 'iptc']) assert.equal(metadata[field], undefined);
+  assert.equal(stored.includes(Buffer.from('sensitive fixture metadata')), false);
+});
+
+for (const query of [
+  'folder=/outside', 'folder=..', 'folder=.', 'folder=./events', 'folder=events/../outside',
+  'folder=events//outside', 'folder=events/', 'folder=', 'folder=C:/outside', 'folder=C:%5Coutside',
+  'folder=..%5Coutside', 'folder=events%2Foutside', 'folder=%2E%2E/outside', 'folder=%252E%252E/outside',
+  'folder[]=../outside', 'folder=x&folder=../outside', 'folder[child]=outside', 'fo%6Cder=events%2foutside',
+  'folder=%00outside', 'folder=%252foutside',
+]) {
+  test(`upload rejects unsafe folder before multipart parsing: ${query}`, async () => {
+    authorize();
+    const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+    const beforeFiles = files();
+    // Deliberately malformed multipart: folder validation must precede Multer.
+    const res = await request(`/images?${query}`, { method: 'POST', body: 'no multipart boundary', headers: { 'content-type': 'multipart/form-data' } });
+    assert.equal(res.status, 400);
+    assert.deepEqual(await res.json(), { error: 'Invalid folder' });
+    assert.equal(create.mock.callCount(), 0);
+    assert.deepEqual(files(), beforeFiles);
+  });
+}
+
+test('upload cannot follow an existing directory symlink outside the upload root', async () => {
+  authorize();
+  const outside = path.join(workspace, 'linked-outside');
+  const link = path.join(workspace, 'uploads', 'linked');
+  fs.mkdirSync(outside);
+  fs.symlinkSync(outside, link, process.platform === 'win32' ? 'junction' : 'dir');
+  const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+  const res = await request('/images?folder=linked/new', { method: 'POST', body: multipart() });
+  assert.equal(res.status, 400);
+  assert.equal(create.mock.callCount(), 0);
+  assert.deepEqual(fs.readdirSync(outside), []);
+});
+
+for (const [label, keys] of [
+  ['unknown', () => [{ keyHash, isActive: true, expiresAt: null }]],
+  ['no active', () => []],
+  ['inactive', () => [{ keyHash, isActive: false, expiresAt: null }]],
+  ['expired', () => [{ keyHash, isActive: true, expiresAt: new Date(0) }]],
+]) {
+  test(`HTTP auth returns 401 without hanging for ${label} key before file work`, async () => {
+    mock.method(prisma.apikey, 'findMany', async () => keys());
+    const beforeFiles = files();
+    const res = await request('/images', { method: 'POST', headers: { 'x-api-key': label === 'unknown' ? 'unmatched' : 'test-key' }, body: multipart() });
+    assert.equal(res.status, 401);
+    assert.deepEqual(files(), beforeFiles);
+  });
+}
+
+test('metadata GET returns a safe 500 on asynchronous database failure', async () => {
+  authorize();
+  mock.method(prisma.image, 'findUnique', async () => { throw Object.assign(new Error('private-db-url'), { detail: 'private record' }); });
+  const res = await request('/images/private-id');
+  assert.equal(res.status, 500);
+  assert.deepEqual(await res.json(), { error: 'internal server error' });
+});
+
+for (const storedPath of ['../outside-delete.png', 'uploads/../outside-delete.png', 'uploads/linked/sentinel.png']) {
+  test(`delete refuses an escaping legacy path: ${storedPath}`, async () => {
+    authorize();
+    const outside = path.join(workspace, 'outside-delete.png');
+    const linkedSentinel = path.join(workspace, 'linked-outside', 'sentinel.png');
+    fs.mkdirSync(path.dirname(linkedSentinel), { recursive: true });
+    if (storedPath.includes('/linked/')) {
+      const link = path.join(workspace, 'uploads', 'linked');
+      if (!fs.existsSync(link)) fs.symlinkSync(path.dirname(linkedSentinel), link, process.platform === 'win32' ? 'junction' : 'dir');
+    }
+    fs.writeFileSync(outside, 'keep outside');
+    fs.writeFileSync(linkedSentinel, 'keep linked');
+    const image = fakeImage({ path: storedPath });
+    mock.method(prisma.image, 'findUnique', async () => image);
+    const remove = mock.method(prisma.image, 'delete', async () => image);
+    const res = await request(`/images?url=${encodeURIComponent(image.url)}`, { method: 'DELETE' });
+    assert.equal(res.status, 500);
+    assert.equal(remove.mock.callCount(), 0);
+    assert.equal(fs.readFileSync(outside, 'utf8'), 'keep outside');
+    assert.equal(fs.readFileSync(linkedSentinel, 'utf8'), 'keep linked');
+  });
+}
+
+for (const body of ['{private malformed body', '{"private":"' + 'x'.repeat(110000) + '"}']) {
+  test(`JSON parser error is safe (${body.length} bytes)`, async () => {
+    const res = await request('/generate?secret=PRIVATE_QUERY', { method: 'POST', body, headers: { 'content-type': 'application/json' } });
+    assert.equal(res.status, body.length > 100000 ? 413 : 400);
+    assert.deepEqual(await res.json(), { error: body.length > 100000 ? 'Request too large' : 'Invalid JSON' });
+  });
+}
+
+test('malformed multipart returns a safe 400 with no files', async () => {
+  authorize();
+  const beforeFiles = files();
+  const res = await request('/images', { method: 'POST', body: 'PRIVATE_BODY', headers: { 'content-type': 'multipart/form-data; boundary=private-boundary' } });
+  assert.equal(res.status, 400);
+  assert.deepEqual(await res.json(), { error: 'Invalid multipart request' });
+  assert.deepEqual(files(), beforeFiles);
+});
+
+test('access and action logs omit URLs, credentials, file data, bodies and stacks', async () => {
+  authorize();
+  const diagnostics = mock.method(console, 'log', () => {});
+  const errors = mock.method(console, 'error', () => {});
+  mock.method(prisma.image, 'create', async () => { throw Object.assign(new Error('PRIVATE_DB_DETAIL'), { detail: 'PRIVATE_RECORD' }); });
+  const previousDebug = process.env.DEBUG;
+  process.env.DEBUG = 'true';
+  try {
+    const res = await request('/images?private=PRIVATE_QUERY', { method: 'POST', body: multipart({ name: 'PRIVATE_FILENAME.png' }), headers: { authorization: 'Bearer PRIVATE_AUTH', 'x-provisioning-key': 'PRIVATE_PROVISIONING' } });
+    assert.equal(res.status, 500);
+    await res.json();
+    assert.equal(diagnostics.mock.callCount(), 0);
+    assert.equal(errors.mock.callCount(), 0);
+    assert.ok(logs.length > 0);
+    const logged = JSON.stringify(logs);
+    assert.doesNotMatch(logged, /PRIVATE|test-key|keyHash|\/images|stack|originalname|buffer|headers|body/i);
+    assert.match(logged, /POST/);
+    assert.match(logged, /500/);
+  } finally { process.env.DEBUG = previousDebug; }
+});
+
+test('upload rejects animated WebP before writing a file', async () => {
+  authorize();
+  const bytes = await sharp(Buffer.concat([Buffer.alloc(12, 0), Buffer.alloc(12, 255)]), { raw: { width: 2, height: 4, channels: 3, pageHeight: 2 } }).webp({ loop: 0, delay: [100, 100] }).toBuffer();
+  assert.equal((await sharp(bytes, { animated: true }).metadata()).pages, 2);
+  const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+  const beforeFiles = files();
+  const res = await request('/images', { method: 'POST', body: multipart({ bytes, type: 'image/webp' }) });
+  assert.equal(res.status, 415);
+  assert.equal(create.mock.callCount(), 0);
+  assert.deepEqual(files(), beforeFiles);
+});
+
+test('upload never overwrites or cleans up an existing file on a name collision', async () => {
+  authorize();
+  const storage = load('utils/storage');
+  mock.method(storage, 'generateFilename', () => 'collision.webp');
+  const existing = path.join(workspace, 'uploads', 'default', 'collision.webp');
+  fs.mkdirSync(path.dirname(existing), { recursive: true });
+  fs.writeFileSync(existing, 'keep existing file');
+  const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+  const res = await request('/images', { method: 'POST', body: multipart() });
+  assert.equal(res.status, 500);
+  assert.equal(create.mock.callCount(), 0);
+  assert.equal(fs.readFileSync(existing, 'utf8'), 'keep existing file');
+});
+
+test('upload removes only its newly created partial file on storage failure', async () => {
+  authorize();
+  const originalOpen = fs.promises.open;
+  mock.method(fs.promises, 'open', async (...args) => {
+    const handle = await originalOpen(...args);
+    const originalWrite = handle.writeFile.bind(handle);
+    handle.writeFile = async (bytes) => { await originalWrite(bytes.subarray(0, 1)); throw new Error('PRIVATE_DISK_ERROR'); };
+    return handle;
+  });
+  const beforeFiles = files();
+  const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+  const res = await request('/images', { method: 'POST', body: multipart() });
+  assert.equal(res.status, 500);
+  assert.equal(create.mock.callCount(), 0);
+  assert.deepEqual(files(), beforeFiles);
+});
+
+for (const headers of [
+  { 'content-type': 'application/json; charset=unsupported-fixture' },
+  { 'content-type': 'application/json', 'content-encoding': 'unsupported-fixture' },
+]) {
+  test(`body parser rejects unsupported encoding safely: ${JSON.stringify(headers)}`, async () => {
+    const res = await request('/generate', { method: 'POST', body: '{}', headers });
+    assert.equal(res.status, 415);
+    assert.deepEqual(await res.json(), { error: 'Invalid request' });
+  });
+}
+
+for (const [label, bytes] of [['JPEG', () => jpeg], ['PNG', () => png], ['WebP', () => webp]]) {
+  test(`upload rejects a ${label} missing its final byte`, async () => {
+    authorize();
+    const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+    const beforeFiles = files();
+    const original = bytes();
+    const res = await request('/images', { method: 'POST', body: multipart({ bytes: original.subarray(0, original.length - 1), type: label === 'WebP' ? 'image/webp' : label === 'JPEG' ? 'image/jpeg' : 'image/png' }) });
+    assert.equal(res.status, 415);
+    assert.equal(create.mock.callCount(), 0);
+    assert.deepEqual(files(), beforeFiles);
+  });
+}
+
+for (const count of [10, 11]) {
+  test(`multipart allows ten bounded metadata fields: ${count} fields`, async () => {
+    authorize();
+    const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+    const body = multipart();
+    for (let i = 0; i < count; i++) body.append(`field${i}`, 'fixture');
+    const res = await request('/images', { method: 'POST', body });
+    assert.equal(res.status, count === 10 ? 201 : 400);
+    assert.equal(create.mock.callCount(), count === 10 ? 1 : 0);
+  });
+}
+
+test('multipart bounds each metadata field without files or rows', async () => {
+  authorize();
+  const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+  const beforeFiles = files();
+  const body = multipart(); body.append('note', 'x'.repeat(16385));
+  const res = await request('/images', { method: 'POST', body });
+  assert.equal(res.status, 400);
+  assert.equal(create.mock.callCount(), 0);
+  assert.deepEqual(files(), beforeFiles);
+});

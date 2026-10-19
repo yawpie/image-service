@@ -1,4 +1,4 @@
-export type StatusCode = 200 | 201 | 202 | 400 | 401 | 403 | 404 | 500;
+export type StatusCode = 200 | 201 | 202 | 400 | 401 | 403 | 404 | 415 | 500;
 
 
 export default class HttpError extends Error {

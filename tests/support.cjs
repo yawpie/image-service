@@ -16,7 +16,6 @@ Object.assign(process.env, {
   MAX_FILE_SIZE: '1024',
   MAX_IMAGE_PIXELS: '16',
   IMAGE_SERVICE_PROVISIONING_KEY: 'fixture-provisioning-key',
-  ALLOWED_MIME: 'image/jpeg,image/png,image/webp,image/pjpeg',
   HOST: 'https://images.test',
   CORS_ORIGIN: '["https://dashboard.test"]',
   STATIC_ORIGIN: 'https://dashboard.test',
@@ -37,9 +36,10 @@ const prisma = {
   apikey: { create: unexpected, findMany: unexpected, count: unexpected, deleteMany: unexpected },
 };
 replaceModule(require.resolve('../dist/lib/prisma'), { prisma });
+const logs = [];
 replaceModule(require.resolve('../dist/utils/logger'), {
   __esModule: true,
-  default: { info() {}, error() {} },
+  default: { info(...args) { logs.push(args); }, error(...args) { logs.push(args); } },
 });
 const pg = { Client: function () { throw new Error('Unexpected admin database call'); }, Pool: function () { throw new Error('Unexpected admin database call'); } };
 replaceModule(require.resolve('pg'), pg);
@@ -62,5 +62,4 @@ function cleanup() {
   fs.rmSync(workspace, { recursive: true, force: true });
 }
 
-module.exports = { load, prisma, pg, response, workspace, cleanup };
-
+module.exports = { load, prisma, pg, response, workspace, cleanup, logs };
