@@ -68,7 +68,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/trivy-cache"
-          docker run --rm --cap-drop ALL --security-opt no-new-privileges \
+          docker run --rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
             --mount "type=bind,source=$RUNNER_TEMP/trivy-cache,target=/cache" --workdir /tmp \
             "$TRIVY_IMAGE" --cache-dir /cache/trivy fs --download-db-only --disable-telemetry \
             --config= --ignorefile= --ignore-policy= --scanners vuln
@@ -80,7 +80,7 @@ jobs:
           for scope in full production; do
             flags=()
             if [ "$scope" = full ]; then flags+=(--include-dev-deps); fi
-            docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+            docker run --rm --user "$(id -u):$(id -g)" --network none --cap-drop ALL --security-opt no-new-privileges \
               --mount "type=bind,source=$RUNNER_TEMP/trivy-input,target=/source,readonly" \
               --mount "type=bind,source=$RUNNER_TEMP/trivy-cache,target=/cache" \
               --mount "type=bind,source=$RUNNER_TEMP/dependency-reports,target=/reports" --workdir /tmp \
