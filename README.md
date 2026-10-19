@@ -32,7 +32,7 @@ Existing uploaded files and metadata are not migrated, rewritten, or deleted. Ex
 Use Node.js 24 LTS and npm 10+ with the committed lockfile. Copy `.env.example` to `.env`, configure both database URLs and the provisioning secret, then:
 
 ```powershell
-npm ci
+npm ci --no-audit --no-fund
 npm run prisma:generate
 npx prisma migrate deploy
 npm run dev
