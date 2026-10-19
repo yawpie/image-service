@@ -35,7 +35,9 @@
       "sha256": "36f25d93e786824749ae67a3b851de7b434998bc898ee3badd1d1a26003ce89a"
     }
   ],
-  "canonicalLockSha256": "3586365059f84f097adfa0a4fab929b36ea5c94c970d76f11dfe44bdba2c09f2",
+  "rawBuildInputLockSha256": "3586365059f84f097adfa0a4fab929b36ea5c94c970d76f11dfe44bdba2c09f2",
+  "rawGitLockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
+  "canonicalLfLockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
   "sourceManifestSha256": "8337ddc36e3a281d6ad88389ed2cf1776657e42aadaf4d49d5dfd766aa7f9cbc",
   "sourceLimits": "Built snapshot and exact overlays are recorded. Subsequent offline dependency gate/policy/workflow, CI-action/secret self-test and documentation/report changes are verified separately; no claim that all final Git HEAD bytes were built. Product runtime/build/TypeScript bytes match the snapshot.",
   "runtimeAssertions": {

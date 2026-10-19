@@ -7,8 +7,9 @@
     "UpdatedAt": "2026-10-19T07:19:54.308593453Z",
     "DownloadedAt": "2026-10-19T14:26:35.23521483Z"
   },
-  "source": "Canonical committed Git lock; no user working lock or node_modules",
-  "rawGitLockSha256": "3586365059f84f097adfa0a4fab929b36ea5c94c970d76f11dfe44bdba2c09f2",
+  "source": "Committed Git lock content; raw scan input retains snapshot CRLF, distinct from raw Git/LF bytes; no user working lock or node_modules",
+  "rawScanInputLockSha256": "3586365059f84f097adfa0a4fab929b36ea5c94c970d76f11dfe44bdba2c09f2",
+  "rawGitLockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
   "canonicalLfLockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
   "downloadPhase": "Public advisory DB only; no source mount",
   "scanPhase": "Network none; read-only manifest/lock input; vulnerability scanner only; no ignore/config suppression",
