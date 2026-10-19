@@ -21,11 +21,22 @@ router.post("/", validateUploadFolder, receiveImage, async (req: Request, res: R
       || png
       || (bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP");
     if (!bitmap) throw new Error("Unsupported bitmap");
-    // libpng can decode pixels even when the final IEND chunk is truncated.
-    if (png && bytes.subarray(-12).toString("hex") !== "0000000049454e44ae426082") throw new Error("Incomplete PNG");
+    if (png) {
+      // libpng can decode pixels even when the final IEND chunk is truncated.
+      if (bytes.subarray(-12).toString("hex") !== "0000000049454e44ae426082") throw new Error("Incomplete PNG");
+      // APNG controls are not exposed in Sharp metadata; inspect bounded chunk headers.
+      for (let offset = 8; offset < bytes.length;) {
+        if (bytes.length - offset < 12) throw new Error("Incomplete PNG chunk");
+        const length = bytes.readUInt32BE(offset);
+        if (length > bytes.length - offset - 12) throw new Error("Incomplete PNG chunk");
+        if (bytes.toString("ascii", offset + 4, offset + 8) === "acTL") throw new Error("Animated PNG");
+        offset += length + 12;
+      }
+    }
     const source = sharp(bytes, { failOn: "warning", limitInputPixels: MAX_IMAGE_PIXELS });
     const metadata = await source.metadata();
-    if (!["jpeg", "png", "webp"].includes(metadata.format || "") || (metadata.pages || 1) > 1) throw new Error("Unsupported bitmap");
+    if (!["jpeg", "png", "webp"].includes(metadata.format || "") || (metadata.pages || 1) > 1
+      || metadata.loop !== undefined || metadata.delay !== undefined) throw new Error("Unsupported bitmap");
     encoded = await source.rotate().webp({ quality: 85 }).toBuffer();
   } catch {
     return res.status(415).json({ error: "Invalid or unsupported image" });

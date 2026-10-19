@@ -646,3 +646,51 @@ test('multipart bounds each metadata field without files or rows', async () => {
   assert.equal(create.mock.callCount(), 0);
   assert.deepEqual(files(), beforeFiles);
 });
+
+for (const [label, type, base64] of [
+  ['two-frame APNG', 'image/png', 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACGFjVEwAAAACAAAAAPONk3AAAAAaZmNUTAAAAAAAAAACAAAAAgAAAAAAAAAAAAEACgAA6FTcAAAAABFJREFUeJxj+M/A8J8BjIEUAB/uA/3SUH0aAAAAGmZjVEwAAAABAAAAAgAAAAIAAAAAAAAAAAABAAoAAHMnNtQAAAATZmRBVAAAAAJ4nGNg+M8AQhAKABvyA/2ix+ebAAAAAElFTkSuQmCC'],
+  ['one-frame APNG', 'image/png', 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACGFjVEwAAAABAAAAALQt6aAAAAAaZmNUTAAAAAAAAAACAAAAAgAAAAAAAAAAAAEACgAA6FTcAAAAABFJREFUeJxj+M/A8J8BjIEUAB/uA/3SUH0aAAAAAElFTkSuQmCC'],
+  ['one-frame looping WebP', 'image/webp', 'UklGRlwAAABXRUJQVlA4WAoAAAACAAAAAQAAAQAAQU5JTQYAAAD/////AABBTk1GMAAAAAAAAAAAAAEAAAEAAGQAAAJWUDggGAAAADABAJ0BKgIAAgABQCYlpAADcAD+/TZoAA=='],
+]) {
+  test(`upload rejects an animation container: ${label}`, async () => {
+    authorize();
+    const bytes = Buffer.from(base64, 'base64');
+    assert.equal((await sharp(bytes).raw().toBuffer()).length, 12, 'fixture contains a decodable 2x2 bitmap');
+    const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+    const beforeFiles = files();
+    const res = await request('/images', { method: 'POST', body: multipart({ bytes, type, name: label.endsWith('WebP') ? 'animated.webp' : 'animated.png' }) });
+    assert.equal(res.status, 415);
+    assert.deepEqual(await res.json(), { error: 'Invalid or unsupported image' });
+    assert.equal(create.mock.callCount(), 0);
+    assert.deepEqual(files(), beforeFiles);
+  });
+}
+
+test('upload accepts static PNG pixel data containing the acTL byte sequence', async () => {
+  authorize();
+  const bytes = await sharp(Buffer.from([97, 99, 84, 76, 1, 2, 3, 4, 5, 6, 7, 8]), { raw: { width: 2, height: 2, channels: 3 } }).png({ compressionLevel: 0, adaptiveFiltering: false }).toBuffer();
+  assert.equal(bytes.includes(Buffer.from('acTL')), true, 'static fixture contains the animation marker inside pixel data');
+  mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+  const res = await request('/images', { method: 'POST', body: multipart({ bytes }) });
+  assert.equal(res.status, 201);
+  const image = await res.json();
+  assert.equal(image.mimeType, 'image/webp');
+  assert.equal((await sharp(fs.readFileSync(path.join(workspace, image.path))).metadata()).format, 'webp');
+});
+
+for (const [label, input] of [
+  ['oversized length', () => { const bytes = Buffer.from(png); bytes.writeUInt32BE(0xffffffff, 8); return bytes; }],
+  ['truncated header', () => Buffer.concat([png.subarray(0, -12), Buffer.from([0, 0]), png.subarray(-12)])],
+  ['missing chunk CRC', () => Buffer.concat([png.subarray(0, -12), Buffer.from([0, 0, 0, 0, 116, 69, 88, 116]), png.subarray(-12)])],
+]) {
+  test(`upload rejects malformed PNG chunk boundaries: ${label}`, async () => {
+    authorize();
+    const create = mock.method(prisma.image, 'create', async ({ data }) => fakeImage(data));
+    const beforeFiles = files();
+    const res = await request('/images', { method: 'POST', body: multipart({ bytes: input() }) });
+    assert.equal(res.status, 415);
+    assert.deepEqual(await res.json(), { error: 'Invalid or unsupported image' });
+    assert.equal(create.mock.callCount(), 0);
+    assert.deepEqual(files(), beforeFiles);
+  });
+}
