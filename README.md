@@ -1,83 +1,56 @@
-# Image Service (Express + TypeScript + Prisma + Postgres)
+# Image Service
 
-Endpoints:
+Express + TypeScript + Prisma + PostgreSQL. Use npm and the committed lockfile.
 
-- POST /images (multipart form field `image`) -> returns JSON metadata (id, url, ...)
-- GET /images/:id -> metadata
+## API contract
 
-Run locally:
+This contract requires the security changes in this branch and a coordinated backend deployment. API keys grant **service-wide** image access; there is no per-admin image ownership or role model.
 
-1. copy .env.example -> .env, sesuaikan DATABASE_URL
-2. npm install
-3. npx prisma generate
-4. npx prisma migrate dev --name init_images
-5. npm run dev
+| Endpoint | Credential | Success |
+| --- | --- | --- |
+| `POST /generate` (JSON) | Server-only `x-provisioning-key` | `201 {"message":"success","key":"<raw key, returned once>"}` |
+| `POST /images` (multipart field `image`) | `x-api-key` | `201` image metadata |
+| `GET /images/:id` | `x-api-key` | `200` image metadata; `404` if missing |
+| `DELETE /images?url=<encoded URL>` | `x-api-key` | `200 {"message":"success"}`; `404` if missing |
+| `GET /uploads/<folder>/<file>` | Public | Static image bytes |
+| `GET /` | Public | `Image Service OK` |
 
-Docker (example):
+Provisioning accepts `{"adminId":"<UUID>","serviceName":"school-dashboard"}`. The ID must identify an existing **active** admin in the backend database (`admin.is_active = true`). `serviceName` must be a nonempty trimmed string of at most 255 characters. Only the hash is stored. A successful rotation atomically replaces previous keys for the same admin, across service names; failed persistence preserves the previous key. Concurrent rotations are serialized per admin, leaving only the latest committed replacement valid. `verbose=true` no longer exposes the database record or hash.
 
-- docker-compose up --build
+Set the same nonempty `IMAGE_SERVICE_PROVISIONING_KEY` in this service and the backend server. The backend derives `adminId` from its verified session and sends `x-provisioning-key` to `/generate`. Never put this secret in browser code, `NEXT_PUBLIC_*`, logs, or client cookies. Missing/blank configuration returns `503`; absent or incorrect credentials return `401` before any admin lookup or mutation. Missing `ADMIN_DATABASE_URL` also fails closed. Inactive/unknown admins return `403`; malformed bodies return `400`. Apply the backend's additive `admin.is_active` migration before enabling provisioning.
 
-## Docker image
+All `/images` operations require an active, unexpired key. Missing, unknown, inactive, expired, or no active keys return `401`; database/hash failures return a generic `500`. CORS preserves the existing allowlist; it does not authenticate a request. The provisioning credential is server-to-server, independent of cookie CSRF protection.
 
-Build the production image:
+New uploads accept bitmap **JPEG, PNG, and WebP** only, with MIME `image/jpeg`, `image/jpg`, `image/pjpeg`, `image/png`, or `image/webp`. MIME and extensions are not proof: the service fully decodes and re-encodes the image as WebP, strips extra metadata, and generates a random `.webp` name. SVG, HTML, corrupt/truncated images, animations, and images over the pixel limit return `415`. The default input-byte limit is **10 MiB** (`MAX_FILE_SIZE`) and the default pixel limit is **25,000,000** (`MAX_IMAGE_PIXELS`); both must be positive integers. Oversized multipart input returns `413`; malformed multipart, missing files, and unexpected fields return `400`. Authentication runs before multipart/file processing.
 
-```powershell
-docker build -t image-service:prod .
-```
+Optional `folder` is one string of safe relative segments such as `gallery/events` (letters, digits, `_`, `-` only per segment). Omit it for `default`. Absolute paths, dot segments, backslashes, percent-encoded separators, arrays, and empty segments return `400` before writing. New files stay under `UPLOAD_DIR`, including when it is an absolute volume path. URLs remain `/uploads/...`. Metadata fields stay `id`, `originalName`, `fileName`, `mimeType`, `size`, `path`, `url`, `createdAt`; `mimeType` and `size` describe the stored WebP. Original names are JSON metadata only. A failed new upload removes only its newly created file.
 
-Run the container (Postgres required; set DATABASE_URL accordingly):
+Existing uploaded files and metadata are not migrated, rewritten, or deleted. Existing relative `uploads/...` metadata paths remain readable/deletable when contained in the configured upload root; deletion refuses paths outside it. Public static legacy files remain public, so existing unsafe files need a separate inventory/cleanup decision. Storage/database failures return generic `500` responses. Access logs contain method, status, and duration only; action logs use fixed identifiers without bodies, URLs, headers, keys, file data, database messages, or stacks.
 
-```powershell
-docker run --rm -p 4000:4000 `
-	-e NODE_ENV=production `
-	-e DATABASE_URL="postgresql://postgres:password@localhost:5432/shared_db?schema=public" `
-	-e PORT=4000 `
-	-v ${PWD}/uploads:/app/uploads `
-	--name image-service image-service:prod
-```
+## Local development
 
-Notes:
-
-- The server exposes port 4000 by default.
-- Static files are served from the `uploads` directory at the URL path `/uploads`.
-- For production, mount a persistent volume to `/app/uploads` to retain files.
-- Prisma migrations should be applied outside of the runtime container (e.g., CI/CD step with `prisma migrate deploy`), or via a one-off job container. This image ships without dev dependencies to keep it small.
-
-## Test suite
-
-Gunakan Node.js 20.13+ dan npm. Dari direktori `image-service`:
+Use Node.js 22 or 24 and npm 10+. Copy `.env.example` to `.env`, configure both database URLs and the provisioning secret, then:
 
 ```powershell
 npm ci
 npm run prisma:generate
-npm test
+npx prisma migrate deploy
+npm run dev
 ```
 
-Dari root workspace: `npm --prefix image-service test`.
-`npm test` membangun TypeScript lalu menjalankan `node:test` bawaan Node.js; tidak ada dependency test tambahan.
+The default port is 4000. Mount persistent storage at `UPLOAD_DIR` for deployed instances. Apply migrations as a separate deployment step. This branch does not change Docker/runtime packaging.
 
-| File | Cakupan |
-| --- | --- |
-| `tests/utils.test.cjs` | Crypto API key, nama/direktori file, pemetaan error Prisma, respons HTTP |
-| `tests/auth.test.cjs` | Middleware API key, pembuatan/rotasi key, validasi admin dan pelepasan client |
-| `tests/api.test.cjs` | App Express asli: health, CORS, auth, multipart upload, file statis, metadata, delete, generate key, error handler |
+Sharp supplies native prebuilt binaries and TypeScript types; optional dependencies must be installed. See the [official installation requirements](https://sharp.pixelplumbing.com/install/), [untrusted input options](https://sharp.pixelplumbing.com/api-constructor/), and [default metadata stripping](https://sharp.pixelplumbing.com/api-output/#keepmetadata).
 
-Tes HTTP memakai port lokal acak, Multer dan filesystem asli. Prisma dan koneksi database admin dimock; PostgreSQL, Docker, `.env`, dan data upload pengguna tidak diperlukan. Setiap file test memakai direktori sementara terpisah yang dibersihkan setelah selesai. Batas upload tes 1 KiB agar kasus file terlalu besar tetap ringan.
-
-Jalankan satu file setelah build, misalnya:
+## Verification
 
 ```powershell
+npm test
 npm run build
-node --test tests/auth.test.cjs
 ```
 
-Tiga tes regresi ditandai `TODO` dan tetap menjalankan assertion untuk menunjukkan bug saat ini:
+`npm test` builds TypeScript and uses built-in `node:test`. HTTP tests use Express, Multer, Sharp decoding, temporary filesystem storage, and random loopback ports. Prisma and remote admin database boundaries are mocked in that suite; it needs no PostgreSQL, Docker, user uploads, or real credentials.
 
-- API key salah tidak menghasilkan respons; request dapat menggantung.
-- Tidak ada key aktif menghasilkan 400, sedangkan tes mengharapkan 401.
-- Query `folder=../outside` dapat menulis di luar direktori upload. Tes membatasi penulisan ini di dalam direktori sementara.
+`npm run test:integration` verifies real PostgreSQL admin lookup, failed-write rollback, and concurrent key rotation. It requires explicit `SECURITY_TEST_DATABASE_URL` equal to `DATABASE_URL` and `SECURITY_TEST_ADMIN_DATABASE_URL` equal to `ADMIN_DATABASE_URL`; both must use `localhost`/`127.0.0.1` and a database ending `_test` or `_ci`. Use two isolated owned databases, apply this repository's migrations to the image database first, and supply an `admin` table with `admin_id UUID PRIMARY KEY, is_active BOOLEAN NOT NULL` in the admin fixture database (or the backend's migrated test schema). The script creates/deletes only synthetic fixture rows and never loads a production fallback. Do not point it at personal/shared development databases.
 
-`TODO` tidak membuat exit code gagal; jangan mengartikannya sebagai bug yang sudah diperbaiki. Setelah bug diperbaiki, hapus penanda `todo` agar assertion menjadi pemeriksaan wajib. Tes juga mencatat perilaku saat ini: error Multer memakai HTTP 500.
-
-Suite ini belum memverifikasi database/migrasi asli, container produksi, atau error database pada GET metadata. Logger diganti stub agar tes tidak membuat log aplikasi.
-
+CI runs the mocked HTTP suite and guarded PostgreSQL checks with synthetic local databases. Local tests and CI do not prove staging/production deployment, reverse-proxy limits, persistent-volume permissions, or a production legacy-file inventory.
