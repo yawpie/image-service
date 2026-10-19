@@ -1,0 +1,60 @@
+{
+  "scannerImage": "aquasec/trivy@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222",
+  "scannerVersion": "0.76.0",
+  "advisoryDb": {
+    "Version": 2,
+    "NextUpdate": "2026-10-20T07:19:54.30859309Z",
+    "UpdatedAt": "2026-10-19T07:19:54.308593453Z",
+    "DownloadedAt": "2026-10-19T14:26:35.23521483Z"
+  },
+  "source": "Canonical committed Git lock; no user working lock or node_modules",
+  "rawGitLockSha256": "3586365059f84f097adfa0a4fab929b36ea5c94c970d76f11dfe44bdba2c09f2",
+  "canonicalLfLockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
+  "downloadPhase": "Public advisory DB only; no source mount",
+  "scanPhase": "Network none; read-only manifest/lock input; vulnerability scanner only; no ignore/config suppression",
+  "scopeFixture": "Actual scanner: full lodash+dev minimist (2 packages/7 findings), production lodash only (1 package/5 findings)",
+  "gateTests": "9 RED/GREEN tests; canonical LF lock and inventory, Windows CRLF portability, scoped findings, DB/report freshness, expiry, malformed/new findings",
+  "historicalNpm": "Prior npm snapshots retained as historical evidence. Counts/feed differ; absent Trivy advisories remain open until version/reachability review, not implicitly fixed.",
+  "actualRemoteCI": "Pending PR runs",
+  "scopes": {
+    "full": {
+      "createdAt": "2026-10-19T18:56:32.36148661Z",
+      "rawReportSha256": "34f1eb70742b110614f7a7dfa5818493495b6c8c0b45fd68fb852412d1a7d396",
+      "packageRows": 242,
+      "uniquePackages": 242,
+      "findingRows": 2,
+      "findings": [
+        {
+          "id": "CVE-2026-93687",
+          "name": "braces",
+          "version": "3.0.3",
+          "severity": "HIGH",
+          "fixed": ""
+        },
+        {
+          "id": "CVE-2026-41907",
+          "name": "uuid",
+          "version": "9.0.1",
+          "severity": "MEDIUM",
+          "fixed": "11.1.1, 12.0.1, 13.0.1"
+        }
+      ]
+    },
+    "production": {
+      "createdAt": "2026-10-19T18:56:33.489803854Z",
+      "rawReportSha256": "c3851829b1ff4c76007859f9b6786a92219bbd7267dc77943138868abe19b0df",
+      "packageRows": 164,
+      "uniquePackages": 164,
+      "findingRows": 1,
+      "findings": [
+        {
+          "id": "CVE-2026-41907",
+          "name": "uuid",
+          "version": "9.0.1",
+          "severity": "MEDIUM",
+          "fixed": "11.1.1, 12.0.1, 13.0.1"
+        }
+      ]
+    }
+  }
+}

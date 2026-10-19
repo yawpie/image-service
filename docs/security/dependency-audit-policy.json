@@ -1,0 +1,41 @@
+{
+  "reviewedAt": "2026-10-19",
+  "expiresAt": "2026-11-02",
+  "owner": "Repository maintainers",
+  "triage": "docs/security/dependency-triage.md",
+  "disposition": "Observed bounded Trivy baseline; proposed deferral, not production release acceptance",
+  "lockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
+  "full": {
+    "packageCount": 242,
+    "inventorySha256": "d7fb4fcfbb5a32e28c774bd82a1bf43883f4e2003f8bf3aabb0ab8a4d3c728ac",
+    "findings": [
+      {
+        "id": "CVE-2026-93687",
+        "name": "braces",
+        "version": "3.0.3",
+        "severity": "HIGH",
+        "fixed": ""
+      },
+      {
+        "id": "CVE-2026-41907",
+        "name": "uuid",
+        "version": "9.0.1",
+        "severity": "MEDIUM",
+        "fixed": "11.1.1, 12.0.1, 13.0.1"
+      }
+    ]
+  },
+  "production": {
+    "packageCount": 164,
+    "inventorySha256": "f6185cbe21bbd67562a4b3b43737fbd62ca14ff69af174913dd07f13cf0d7c32",
+    "findings": [
+      {
+        "id": "CVE-2026-41907",
+        "name": "uuid",
+        "version": "9.0.1",
+        "severity": "MEDIUM",
+        "fixed": "11.1.1, 12.0.1, 13.0.1"
+      }
+    ]
+  }
+}

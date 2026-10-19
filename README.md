@@ -29,7 +29,7 @@ Existing uploaded files and metadata are not migrated, rewritten, or deleted. Ex
 
 ## Local development
 
-Use Node.js 22 or 24 and npm 10+. Copy `.env.example` to `.env`, configure both database URLs and the provisioning secret, then:
+Use Node.js 24 LTS and npm 10+ with the committed lockfile. Copy `.env.example` to `.env`, configure both database URLs and the provisioning secret, then:
 
 ```powershell
 npm ci
@@ -38,7 +38,7 @@ npx prisma migrate deploy
 npm run dev
 ```
 
-The default port is 4000. Mount persistent storage at `UPLOAD_DIR` for deployed instances. Apply migrations as a separate deployment step. This branch does not change Docker/runtime packaging.
+The default port is 4000. The Docker build uses supported Node.js 24 on Debian Bookworm, runs as the `node` user, and removes unused global npm/Yarn from the runner. Mount persistent storage at `UPLOAD_DIR` with write access for that user (UID 1000). Apply image-service migrations as a separate deployment step; the runner contains the generated Prisma client, while the Prisma migration CLI remains in the build/development dependencies. The backend's `admin.is_active` migration must be applied before provisioning is enabled. See [container and CI evidence](docs/security/container-ci-remediation.md).
 
 Sharp supplies native prebuilt binaries and TypeScript types; optional dependencies must be installed. See the [official installation requirements](https://sharp.pixelplumbing.com/install/), [untrusted input options](https://sharp.pixelplumbing.com/api-constructor/), and [default metadata stripping](https://sharp.pixelplumbing.com/api-output/#keepmetadata).
 
