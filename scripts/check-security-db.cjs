@@ -4,7 +4,8 @@ function readTestEnvironment(env = process.env) {
   const values = {};
   for (const [target, explicit] of [['DATABASE_URL', 'SECURITY_TEST_DATABASE_URL'], ['ADMIN_DATABASE_URL', 'SECURITY_TEST_ADMIN_DATABASE_URL']]) {
     assert.ok(env[explicit] && env[target] === env[explicit], `${explicit} must explicitly match ${target}`);
-    const url = new URL(env[explicit]);
+    let url;
+    try { url = new URL(env[explicit]); } catch { throw new Error('Invalid test database URL'); }
     assert.ok(['postgres:', 'postgresql:'].includes(url.protocol) && ['localhost', '127.0.0.1'].includes(url.hostname), 'Only loopback PostgreSQL test databases are allowed');
     assert.match(decodeURIComponent(url.pathname), /^\/[a-zA-Z0-9_]+_(test|ci)$/, 'Database name must end in _test or _ci');
     for (const [key, value] of url.searchParams) assert.ok(key === 'schema' && value === 'public', 'Only schema=public is allowed in test database URL options');
@@ -12,7 +13,7 @@ function readTestEnvironment(env = process.env) {
   }
   const image = new URL(values.DATABASE_URL);
   const admin = new URL(values.ADMIN_DATABASE_URL);
-  assert.ok(image.host !== admin.host || image.pathname !== admin.pathname, 'Image and admin fixtures must use separate databases');
+  assert.ok((image.port || '5432') !== (admin.port || '5432') || decodeURIComponent(image.pathname) !== decodeURIComponent(admin.pathname), 'Image and admin fixtures must use separate databases');
   return values;
 }
 

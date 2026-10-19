@@ -18,3 +18,16 @@ for (const [label, overrides] of [
   ['other schema', { DATABASE_URL: image.replace('public', 'private'), SECURITY_TEST_DATABASE_URL: image.replace('public', 'private') }],
   ['shared database', { ADMIN_DATABASE_URL: image, SECURITY_TEST_ADMIN_DATABASE_URL: image }],
 ]) test(`security DB guard rejects ${label} before connecting`, () => assert.throws(() => readTestEnvironment({ ...valid, ...overrides })));
+
+test('security DB guard treats loopback aliases and encoded names as the same database', () => {
+  const alias = image.replace('127.0.0.1:5432', 'localhost').replace('image_test', 'image%5ftest');
+  assert.throws(() => readTestEnvironment({ ...valid, ADMIN_DATABASE_URL: alias, SECURITY_TEST_ADMIN_DATABASE_URL: alias }), /separate databases/);
+});
+
+test('security DB guard does not expose credentials from a malformed URL', () => {
+  const malformed = 'PRIVATE_PASSWORD invalid url';
+  assert.throws(() => readTestEnvironment({ ...valid, DATABASE_URL: malformed, SECURITY_TEST_DATABASE_URL: malformed }), (error) => {
+    assert.doesNotMatch(JSON.stringify(error), /PRIVATE_PASSWORD/);
+    return true;
+  });
+});
