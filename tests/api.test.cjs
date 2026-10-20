@@ -371,6 +371,37 @@ for (const body of [null, [], {}, { adminId }, { adminId: 'not-a-uuid', serviceN
   });
 }
 
+for (const [label, id, accepted] of [
+  ['v1', '6ba7b810-9dad-11d1-80b4-00c04fd430c8', true],
+  ['v2', '00000000-0000-2000-8000-000000000000', true],
+  ['v3', '6fa459ea-ee8a-3ca4-894e-db77e160355e', true],
+  ['v4', '11111111-1111-4111-8111-111111111111', true],
+  ['v5', '886313e1-3b8a-5372-9b90-0c9aee199e5d', true],
+  ['NIL', '00000000-0000-0000-0000-000000000000', true],
+  ['uppercase', '6FA459EA-EE8A-3CA4-894E-DB77E160355E', true],
+  ['v6', '1ed6b1f4-6ab3-6cfe-86c4-5dd904348a1f', false],
+  ['v7', '01890f47-6f00-7cc4-98c4-dc0c0c07398f', false],
+  ['v8', '00000000-0000-8000-8000-000000000000', false],
+  ['MAX', 'ffffffff-ffff-ffff-ffff-ffffffffffff', false],
+  ['invalid variant', '11111111-1111-4111-7111-111111111111', false],
+  ['invalid hex', 'g1111111-1111-4111-8111-111111111111', false],
+  ['no separators', '11111111111141118111111111111111', false],
+  ['leading whitespace', ' 11111111-1111-4111-8111-111111111111', false],
+  ['trailing whitespace', '11111111-1111-4111-8111-111111111111 ', false],
+  ['embedded NUL', '11111111-1111-4111-8111-111111111111\0', false],
+]) {
+  test(`generate preserves the original UUID acceptance contract: ${label}`, async () => {
+    const validate = mock.method(admin, 'validateAdminId', async () => true);
+    const create = mock.method(keyService, 'createApiKey', async () => ({ rawKey: 'new-key' }));
+    const res = await generate({ adminId: id, serviceName: 'dashboard' });
+    assert.equal(res.status, accepted ? 201 : 400);
+    assert.equal(validate.mock.callCount(), accepted ? 1 : 0);
+    assert.equal(create.mock.callCount(), accepted ? 1 : 0);
+    if (accepted) assert.deepEqual(create.mock.calls[0].arguments, ['dashboard', id]);
+    else assert.deepEqual(await res.json(), { error: 'adminId must be a UUID' });
+  });
+}
+
 test('generate denies unknown or inactive admin without creating key', async () => {
   mock.method(admin, 'validateAdminId', async () => false);
   const create = mock.method(keyService, 'createApiKey', async () => {});

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { createHash, timingSafeEqual } from "crypto";
-import { validate as isUuid } from "uuid";
+import { validate as isUuid, version as uuidVersion } from "uuid";
 import { createApiKey } from "../services/apiKeyService";
 import { validateAdminId } from "../utils/checkAdminId";
 import logger from "../utils/logger";
@@ -16,7 +16,10 @@ router.post("/", async (req, res) => {
   }
 
   const { serviceName, adminId } = req.body ?? {};
-  if (typeof adminId !== "string" || !isUuid(adminId)) return res.status(400).json({ error: "adminId must be a UUID" });
+  // Preserve the v1-v5 and NIL provisioning contract after the library upgrade.
+  if (typeof adminId !== "string" || !isUuid(adminId) || uuidVersion(adminId) > 5) {
+    return res.status(400).json({ error: "adminId must be a UUID" });
+  }
   if (typeof serviceName !== "string" || !serviceName.trim() || serviceName.trim().length > 255) {
     return res.status(400).json({ error: "serviceName must contain 1 to 255 characters" });
   }

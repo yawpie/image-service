@@ -1,5 +1,7 @@
 # Triase temuan image container
 
+> **Catatan graph residual 20 Oktober 2026:** tabel di bawah merekam image historis beserta dependency saat itu. Runner kandidat baru dan risiko yang masih terbuka tersedia pada [triase residual](container-residual-triage.md); angka/finding lama tetap dipertahankan.
+
 Snapshot 20 Oktober 2026 WITA. Image `sha256:176af845e32cdea7aa9832277a8bc480ba67d2aee484210cc77718b56da7c967`; Trivy 0.76.0 dengan database 19 Oktober 2026 07:19:54 UTC. Hasil lengkap dan hash report asli disimpan pada [JSON](container-vulnerabilities-2026-10-20.json). Angka menghitung pasangan paket/advisory, termasuk pengulangan source CVE pada paket sibling; bukan jumlah jalur eksploitasi API.
 
 Hitungan tanpa filter: `{"debian": {"CRITICAL": 1, "HIGH": 58, "LOW": 87, "MEDIUM": 95, "UNKNOWN": 1}, "node-pkg": {"MEDIUM": 1}}`. Exit 0 berarti scanner selesai, bukan persetujuan risiko.

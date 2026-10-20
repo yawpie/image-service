@@ -3,11 +3,11 @@
   "expiresAt": "2026-11-02",
   "owner": "Repository maintainers",
   "triage": "docs/security/dependency-triage.md",
-  "disposition": "Observed bounded Trivy baseline; proposed deferral, not production release acceptance",
-  "lockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
+  "disposition": "Observed residual Trivy baseline; braces remains in development tooling; release risk acceptance is separate",
+  "lockSha256": "e4a4e2770b441ad26ca42ac342bbe2eeaf9914444d702a604b08e5a5ddbd7b3b",
   "full": {
-    "packageCount": 242,
-    "inventorySha256": "d7fb4fcfbb5a32e28c774bd82a1bf43883f4e2003f8bf3aabb0ab8a4d3c728ac",
+    "packageCount": 241,
+    "inventorySha256": "7371328545a3b12e03053de6f345fd478ae1a95a9d1b4bba4c35738e757e69c0",
     "findings": [
       {
         "id": "CVE-2026-93687",
@@ -15,27 +15,12 @@
         "version": "3.0.3",
         "severity": "HIGH",
         "fixed": ""
-      },
-      {
-        "id": "CVE-2026-41907",
-        "name": "uuid",
-        "version": "9.0.1",
-        "severity": "MEDIUM",
-        "fixed": "11.1.1, 12.0.1, 13.0.1"
       }
     ]
   },
   "production": {
     "packageCount": 164,
-    "inventorySha256": "f6185cbe21bbd67562a4b3b43737fbd62ca14ff69af174913dd07f13cf0d7c32",
-    "findings": [
-      {
-        "id": "CVE-2026-41907",
-        "name": "uuid",
-        "version": "9.0.1",
-        "severity": "MEDIUM",
-        "fixed": "11.1.1, 12.0.1, 13.0.1"
-      }
-    ]
+    "inventorySha256": "df62897f4ff870d98c9af9ce149228e8372b04456a72d0d0312e4cfa2f23541e",
+    "findings": []
   }
 }

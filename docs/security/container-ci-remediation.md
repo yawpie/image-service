@@ -1,5 +1,7 @@
 # Container dan CI: bukti perbaikan keamanan
 
+> **Catatan kandidat residual 20 Oktober 2026:** image/graph pada laporan di bawah adalah bukti historis dan tetap dipertahankan. Runner canonical baru, probe dan scan aktual dicatat terpisah pada [verifikasi residual](container-residual-verification-2026-10-20.json), [triase residual](container-residual-triage.md) dan [semua finding residual](container-residual-vulnerabilities-2026-10-20.json). Dockerfile/.dockerignore tidak berubah. CI graph baru masih wajib lulus; staging ditunda pengguna dan menjadi **BLOCKER rilis**.
+
 Snapshot **20 Oktober 2026 WITA**. Paket ini menutup jalur runtime Node yang EOL dan kebocoran konteks build, serta menambahkan gate regresi. Ini bukti lokal, bukan persetujuan rilis staging/produksi.
 
 ## Runtime dan sumber yang benar-benar dibangun

@@ -1,28 +1,59 @@
 {
   "scannerImage": "aquasec/trivy@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222",
   "scannerVersion": "0.76.0",
+  "downloadPhase": "Fresh public advisory DB downloaded into an empty task cache, without any source mount",
+  "scanPhase": "Network none; read-only package.json/package-lock.json only; vulnerability scanner, telemetry disabled, empty config/ignore, pinned image",
+  "historicalNpm": "Prior npm snapshots retained as historical evidence. Counts/feed differ; absent Trivy advisories remain open until version/reachability review, not implicitly fixed.",
   "advisoryDb": {
     "Version": 2,
-    "NextUpdate": "2026-10-20T07:19:54.30859309Z",
-    "UpdatedAt": "2026-10-19T07:19:54.308593453Z",
-    "DownloadedAt": "2026-10-19T14:26:35.23521483Z"
+    "NextUpdate": "2026-10-20T19:08:34.442427458Z",
+    "UpdatedAt": "2026-10-19T19:08:34.442427859Z",
+    "DownloadedAt": "2026-10-19T23:30:49.722513077Z"
   },
-  "source": "Committed Git lock content; raw scan input retains snapshot CRLF, distinct from raw Git/LF bytes; no user working lock or node_modules",
-  "rawScanInputLockSha256": "3586365059f84f097adfa0a4fab929b36ea5c94c970d76f11dfe44bdba2c09f2",
-  "rawGitLockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
-  "canonicalLfLockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
-  "downloadPhase": "Public advisory DB only; no source mount",
-  "scanPhase": "Network none; read-only manifest/lock input; vulnerability scanner only; no ignore/config suppression",
-  "scopeFixture": "Actual scanner: full lodash+dev minimist (2 packages/7 findings), production lodash only (1 package/5 findings)",
-  "gateTests": "9 RED/GREEN tests; canonical LF lock and inventory, Windows CRLF portability, scoped findings, DB/report freshness, expiry, malformed/new findings",
-  "historicalNpm": "Prior npm snapshots retained as historical evidence. Counts/feed differ; absent Trivy advisories remain open until version/reachability review, not implicitly fixed.",
-  "actualRemoteCI": "Pending PR runs",
+  "source": "Candidate graph from tracked source and canonical fixture lock; original backend user lock and node_modules were excluded. The Git blob below contains the exact canonical LF lock.",
+  "canonicalGitLockBlob": "0fad9d472bb4aee18fbe60d673e3327b907c2591",
+  "rawScanInputLockSha256": "3c669ed1c21a9c42f1dadf0a946d4a587fb2eef8229404841785ad0d37605844",
+  "rawGitLockSha256": "e4a4e2770b441ad26ca42ac342bbe2eeaf9914444d702a604b08e5a5ddbd7b3b",
+  "canonicalLfLockSha256": "e4a4e2770b441ad26ca42ac342bbe2eeaf9914444d702a604b08e5a5ddbd7b3b",
+  "scopeFixture": "The earlier scanner scope-control fixture remains historical evidence in previousObservation; this fresh scan lists every full/production package separately.",
+  "gateTests": "The existing nine policy RED/GREEN controls are retained; this revision reruns them and the CLI against the actual new scoped reports.",
+  "actualRemoteCI": "Required for the new graph after review/push; earlier passing PR heads used the previous graph",
+  "localEvidence": "Coordinator task evidence: residual-dependencies-20261020/source-snapshot.json, reports/final-*.json, cache/trivy/db/metadata.json and validation logs",
   "scopes": {
     "full": {
-      "createdAt": "2026-10-19T18:56:32.36148661Z",
-      "rawReportSha256": "34f1eb70742b110614f7a7dfa5818493495b6c8c0b45fd68fb852412d1a7d396",
+      "createdAt": "2026-10-19T23:41:39.858268147Z",
+      "rawReportSha256": "898584fe425aed36937ef605097a392fc2d59197c1beba30b34c8a4ff1100080",
+      "packageRows": 241,
+      "uniquePackages": 241,
+      "inventorySha256": "7371328545a3b12e03053de6f345fd478ae1a95a9d1b4bba4c35738e757e69c0",
+      "findingRows": 1,
+      "findings": [
+        {
+          "id": "CVE-2026-93687",
+          "name": "braces",
+          "version": "3.0.3",
+          "severity": "HIGH",
+          "fixed": ""
+        }
+      ]
+    },
+    "production": {
+      "createdAt": "2026-10-19T23:41:48.646155404Z",
+      "rawReportSha256": "835f2d6e52e3792aba45599a22d38cab41908168d2becfab25a8ea93ff98a8d0",
+      "packageRows": 164,
+      "uniquePackages": 164,
+      "inventorySha256": "df62897f4ff870d98c9af9ce149228e8372b04456a72d0d0312e4cfa2f23541e",
+      "findingRows": 0,
+      "findings": []
+    }
+  },
+  "sameAdvisoryDbBaseline": {
+    "full": {
+      "createdAt": "2026-10-19T23:32:26.39823989Z",
+      "rawReportSha256": "5bc04b72b1f32c176a6c55b21ecdb6d271115d83992bcb00fa204f740052487e",
       "packageRows": 242,
       "uniquePackages": 242,
+      "inventorySha256": "d7fb4fcfbb5a32e28c774bd82a1bf43883f4e2003f8bf3aabb0ab8a4d3c728ac",
       "findingRows": 2,
       "findings": [
         {
@@ -42,10 +73,11 @@
       ]
     },
     "production": {
-      "createdAt": "2026-10-19T18:56:33.489803854Z",
-      "rawReportSha256": "c3851829b1ff4c76007859f9b6786a92219bbd7267dc77943138868abe19b0df",
+      "createdAt": "2026-10-19T23:32:27.115739755Z",
+      "rawReportSha256": "0819e6cf4d87a0fc94b7241a1361637056df733d8a52b5d7a343dbdc1ba3aa3e",
       "packageRows": 164,
       "uniquePackages": 164,
+      "inventorySha256": "f6185cbe21bbd67562a4b3b43737fbd62ca14ff69af174913dd07f13cf0d7c32",
       "findingRows": 1,
       "findings": [
         {
@@ -56,6 +88,67 @@
           "fixed": "11.1.1, 12.0.1, 13.0.1"
         }
       ]
+    }
+  },
+  "previousObservation": {
+    "scannerImage": "aquasec/trivy@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222",
+    "scannerVersion": "0.76.0",
+    "advisoryDb": {
+      "Version": 2,
+      "NextUpdate": "2026-10-20T07:19:54.30859309Z",
+      "UpdatedAt": "2026-10-19T07:19:54.308593453Z",
+      "DownloadedAt": "2026-10-19T14:26:35.23521483Z"
+    },
+    "source": "Committed Git lock content; raw scan input retains snapshot CRLF, distinct from raw Git/LF bytes; no user working lock or node_modules",
+    "rawScanInputLockSha256": "3586365059f84f097adfa0a4fab929b36ea5c94c970d76f11dfe44bdba2c09f2",
+    "rawGitLockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
+    "canonicalLfLockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
+    "downloadPhase": "Public advisory DB only; no source mount",
+    "scanPhase": "Network none; read-only manifest/lock input; vulnerability scanner only; no ignore/config suppression",
+    "scopeFixture": "Actual scanner: full lodash+dev minimist (2 packages/7 findings), production lodash only (1 package/5 findings)",
+    "gateTests": "9 RED/GREEN tests; canonical LF lock and inventory, Windows CRLF portability, scoped findings, DB/report freshness, expiry, malformed/new findings",
+    "historicalNpm": "Prior npm snapshots retained as historical evidence. Counts/feed differ; absent Trivy advisories remain open until version/reachability review, not implicitly fixed.",
+    "actualRemoteCI": "Pending PR runs",
+    "scopes": {
+      "full": {
+        "createdAt": "2026-10-19T18:56:32.36148661Z",
+        "rawReportSha256": "34f1eb70742b110614f7a7dfa5818493495b6c8c0b45fd68fb852412d1a7d396",
+        "packageRows": 242,
+        "uniquePackages": 242,
+        "findingRows": 2,
+        "findings": [
+          {
+            "id": "CVE-2026-93687",
+            "name": "braces",
+            "version": "3.0.3",
+            "severity": "HIGH",
+            "fixed": ""
+          },
+          {
+            "id": "CVE-2026-41907",
+            "name": "uuid",
+            "version": "9.0.1",
+            "severity": "MEDIUM",
+            "fixed": "11.1.1, 12.0.1, 13.0.1"
+          }
+        ]
+      },
+      "production": {
+        "createdAt": "2026-10-19T18:56:33.489803854Z",
+        "rawReportSha256": "c3851829b1ff4c76007859f9b6786a92219bbd7267dc77943138868abe19b0df",
+        "packageRows": 164,
+        "uniquePackages": 164,
+        "findingRows": 1,
+        "findings": [
+          {
+            "id": "CVE-2026-41907",
+            "name": "uuid",
+            "version": "9.0.1",
+            "severity": "MEDIUM",
+            "fixed": "11.1.1, 12.0.1, 13.0.1"
+          }
+        ]
+      }
     }
   }
 }

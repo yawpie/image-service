@@ -1,34 +1,40 @@
 # Triase dependency image-service
 
-Snapshot 20 Oktober 2026 WITA. Graph canonical memakai Sharp 0.35.5, Multer 2.4.0, Morgan 1.12.1, Express 4.22.3 dan Prisma 5. Audit lengkap mencatat empat paket rentan (tiga high dan satu moderate); audit tanpa dev mencatat satu moderate. Angka tersebut menghitung paket/propagasi, bukan empat jalur eksploitasi aplikasi yang terbukti.
+Snapshot residual: 20 Oktober 2026 WITA. Graph canonical mempertahankan Sharp 0.35.5, Multer 2.4.0, Morgan 1.12.1, Express 4.22.3 dan Prisma 5. UUID diperbarui dari 9.0.1 ke **11.1.1 exact**, versi patch yang tetap mendukung CommonJS. `@types/uuid` dihapus karena paket UUID menyediakan tipe sendiri; tidak ada migrasi ESM.
 
-- High `braces` [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) merambat melalui `chokidar` dan `ts-node-dev`, yang hanya dipakai `npm run dev`. Runner produksi menjalankan `node dist/index.js` dan memangkas dev dependencies. Ini mengurangi keterjangkauan runtime, tetapi build/CI tetap harus memperlakukan pola/input tooling sebagai tidak tepercaya. Tidak ada patch kompatibel untuk induk lama; penggantian watcher ditunda sebagai pekerjaan terpisah.
-- Moderate `uuid` [GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq) terkait penulisan buffered API. Kode aplikasi memakai `v4()` tanpa buffer dan `validate()`, sehingga jalur buffered tidak dipanggil. Upgrade major di luar patch minimal ini; triase ulang wajib bila cara penggunaan berubah.
+## Kompatibilitas UUID dan bukti regresi
 
-## Gate dependensi offline CI
+[Advisory UUID](https://github.com/advisories/GHSA-w5hq-g745-h8pq) membahas bounds pada API v3/v5/v6 dengan buffer. Caller aplikasi memakai `v4()` tanpa buffer untuk nama file serta `validate()` pada provisioning. [Rilis resmi 11.1.1](https://github.com/uuidjs/uuid/releases/tag/v11.1.1) membawa patch. Perubahan library tetap memerlukan pembatasan kontrak: validate baru juga menerima versi UUID yang sebelumnya ditolak.
 
-Gate aktif memakai Trivy 0.76.0 yang dipatok digest, bukan permintaan audit npm. Database advisory publik diunduh pada tahap tanpa mount source; setelah itu dua scope dipindai dengan `--network none`, input manifest/lock read-only, `--offline-scan --scanners vuln --disable-telemetry`, serta konfigurasi/ignore kosong. Scanner bekerja dari `/tmp`, di luar source. `--include-dev-deps` dipakai hanya pada scope penuh; default npm lockfile Trivy mengecualikan dev. Instalasi CI memakai `npm ci --no-audit --no-fund`, sehingga audit otomatis npm juga tidak mengekspor graph.
+Corpus HTTP berisi **17 kasus** (v1–v8, NIL/MAX, uppercase dan input malformed) lulus pada 9.0.1. Setelah upgrade polos, **empat kasus RED** menerima HTTP 201 padahal harus 400: v6, v7, v8 dan MAX. Guard `validate` lalu `version <= 5` menghasilkan GREEN, mempertahankan v1–v5 serta NIL dan menolak input baru sebelum lookup admin/mutasi key. Pengecekan active-admin tetap berlaku untuk setiap ID yang lolos syntax. Pengujian nama file membuktikan format UUIDv4 acak/WebP tetap sama.
 
-Review otomatis menolak percobaan audit npm baru karena daftar dependensi repository privat akan dikirim ke registry tanpa izin ekspor eksplisit. Perintah tersebut tidak dijalankan dan tidak dicoba ulang melalui host/CI lain. Jalur Trivy ini mengunduh informasi publik lalu menganalisis source secara lokal; tidak mengunggah source atau graph ke layanan scanner.
+Suite akhir lulus: **197 tes aplikasi + 9 kontrol gate = 206 tes**, build, serta **3 tes PostgreSQL nyata** (active admin, rollback gagal tulis dan rotasi bersamaan). PostgreSQL memakai database sintetis milik task dan env eksplisit; cwd source-only menghindari pemuatan `.env` pribadi. Tes native/symlink Windows yang ditolak sandbox lulus setelah dijalankan pada lingkungan native; kontrol produk tidak dilonggarkan.
 
-[Policy](dependency-audit-policy.json) mengikat hash isi lock canonical setelah normalisasi CRLF ke LF, hash/jumlah inventaris paket lengkap untuk setiap scope, serta identitas advisory/paket/versi/severity/fix yang diamati. Tidak ada pengecualian seluruh severity atau dev dependency. Scanner gagal, JSON malformed, target npm kosong/salah, inventaris tidak lengkap, perubahan graph/temuan yang belum ditriase, DB lebih dari 24 jam atau melewati `NextUpdate`, report lama/mendahului unduhan DB, dan policy kedaluwarsa menggagalkan gate. Tanggal review UTC 19 Oktober 2026 (20 Oktober WITA), kedaluwarsa 2 November 2026; pemilik tindak lanjut maintainer repository. Pembaruan graph memerlukan scan serta triase baru, bukan mengganti hash tanpa review.
+## Snapshot npm historis dan risiko tersisa
 
-Sembilan tes gate memiliki RED lalu GREEN, termasuk kontrol report/DB gagal dan portabilitas CRLF Windows. Ketiganya dijalankan lagi pada Node 24.22.0 Linux tanpa jaringan dan lulus bersama report canonical aktual. Fixture scanner nyata memuat `lodash` produksi dan `minimist` dev: full 2 paket/7 finding, produksi 1 paket/5 finding; advisory minimist hanya terdapat pada scope penuh. [Ringkasan mesin](dependency-scan-verification-2026-10-20.json) merekam hash report dan lock raw/canonical. DB lokal bertanggal 19 Oktober 2026 07:19:54 UTC; validasi download-only exit 0 memakai cache task yang masih segar, bukan klaim unduh paksa ulang.
+Audit npm sebelum paket residual mencatat empat paket rentan pada full (tiga high dan satu moderate), serta satu moderate tanpa dev. Itu menghitung paket/propagasi dan **bukan audit npm terkini**. Snapshot tetap dipertahankan. UUID 11.1.1 menambal advisory UUID yang diketahui; tidak adanya advisory pada feed lain bukan alasan penutupan.
 
-Angka npm historis di atas menghitung paket/propagasi, sedangkan Trivy menghitung pasangan paket/advisory pada feed yang berbeda. Perbedaan cakupan atau freshness feed tidak membuktikan perbaikan versi. Seluruh advisory npm yang sudah diketahui tetap terbuka bila tidak muncul pada DB Trivy saat ini; kelulusan gate teknis maupun nol pada salah satu feed bukan persetujuan rilis atau penerimaan risiko pengguna. Snapshot npm terdahulu dipertahankan sebagai bukti asal, bukan prosedur audit aktif. Maintainer wajib meninjau semua risiko yang masih terbuka sebelum rilis dan saat entrypoint/input/versi berubah.
+High `braces` [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) melalui chokidar/ts-node-dev **tetap terbuka di dev**. Script dev masih memakainya; runner produksi menjalankan Node hasil build dan memangkas dev dependency. Tidak ada patch kompatibel dalam rantai watcher lama, dan tidak ada penggantian watcher untuk mengejar nol. CI/dev tetap memiliki risiko availability bila pola/input tooling tidak tepercaya.
 
-Referensi resmi: [cakupan npm dan dev dependency](https://trivy.dev/docs/v0.76/guide/coverage/language/nodejs/), [flag filesystem scanner](https://trivy.dev/docs/v0.76/guide/references/configuration/cli/trivy_filesystem/). CI remote tetap menunggu PR; pengujian lokal tidak menyatakan GitHub Actions sudah berjalan.
+## Pemindaian Trivy aktual dan policy
 
-## Temuan feed Trivy pada lock canonical
+Scanner **Trivy 0.76.0** dipatok digest `sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222`. Unduhan DB publik ke cache task baru tidak memasang source: `UpdatedAt` 19 Oktober 2026 19:08:34 UTC, `DownloadedAt` 23:30:49 UTC, `NextUpdate` 20 Oktober 2026 19:08:34 UTC. Baseline/kandidat menggunakan DB yang sama. Scan memasang hanya manifest/lock read-only dengan jaringan `none`, telemetry nonaktif, konfigurasi/ignore kosong dan tanpa filter severity; full memakai `--include-dev-deps`.
 
-| Scope | Paket unik yang diperiksa | Pasangan paket/advisory |
+| Scope | Baseline pada DB yang sama | Graph residual |
 | --- | --- | --- |
-| full | 242 | 2 |
-| production | 164 | 1 |
+| full | 242 paket unik / 2 pasangan paket-advisory | **241 paket unik / 1 HIGH** |
+| production | 164 paket unik / 1 pasangan paket-advisory | **164 paket unik / 0 temuan feed Trivy** |
 
-Semua temuan berikut tetap tercatat dalam policy. Disposisinya usulan penundaan berbatas waktu hingga review maintainer paling lambat 2 November 2026, bukan persetujuan produksi. Kolom fix hanya merekam feed; adanya versi fix belum membuktikan kompatibilitas pembaruan pada graph ini.
+Temuan full adalah **CVE-2026-93687 / braces 3.0.3**, tanpa fix di feed saat scan. [Policy](dependency-audit-policy.json) hanya mencatat fingerprint/inventaris/hash aktual; tidak menyembunyikan seluruh severity atau dev. Gate menolak source/lock/inventaris berubah, advisory baru, scan gagal, JSON malformed, DB/report kedaluwarsa dan expiry policy. Pemilik tindak lanjut **maintainer repository**, review paling lambat **2 November 2026 UTC** dan sebelum rilis; penerimaan risiko masih terbuka.
 
-| Advisory / paket | Severity; scope | Fix yang dilaporkan | Paparan dan tindak lanjut |
-| --- | --- | --- | --- |
-| CVE-2026-93687 / braces 3.0.3 | HIGH; full saja | Belum tercantum | Rantai watcher hanya scope dev, dipangkas dari runner; risiko CI/dev tetap terbuka sebagaimana uraian di atas. |
-| CVE-2026-41907 / uuid 9.0.1 | MEDIUM; full + produksi | 11.1.1, 12.0.1, 13.0.1 | Paket produksi. Aplikasi memanggil v4 tanpa buffer dan validate; buffered API yang dibahas advisory tidak dipanggil oleh caller aplikasi saat ini. |
+[Ringkasan mesin](dependency-scan-verification-2026-10-20.json) memisahkan **raw input CRLF** dari **Git/canonical LF**, menyimpan baseline dengan DB sama dan `previousObservation` utuh. Kontrol scanner scope sebelumnya (lodash produksi + minimist dev: full 2 paket/7 finding, produksi 1 paket/5 finding) tetap historis. Sembilan kontrol gate RED/GREEN dan pemeriksaan CLI tetap dijalankan; tanggal report tidak direlabel setelah jeda proses.
+
+Review otomatis sebelumnya menolak audit npm baru karena ekspor graph repository privat tanpa izin eksplisit. Ia tidak dicoba ulang melalui host/CI lain. Instalasi memakai `--no-audit --no-fund`; Trivy mengunduh data publik lalu menganalisis lokal tanpa mengunggah source/graph. Cakupan/freshness feed npm dan Trivy berbeda; advisory historis yang belum dibuktikan patch atau hilang jalurnya tetap terbuka. Nol pada production Trivy bukan persetujuan risiko atau bukti seluruh aplikasi aman.
+
+## Runner dan batas rilis
+
+Runner kandidat baru dibangun dari snapshot tracked + perubahan source/lock canonical, dengan Dockerfile/.dockerignore tetap sama. Lihat [verifikasi runner residual](container-residual-verification-2026-10-20.json) dan [triase runner residual](container-residual-triage.md). Archive/report container sebelumnya tetap historis dengan graph UUID 9; tidak diganti namanya menjadi kandidat baru. Bukti raw/hash/source baru dicatat terpisah.
+
+CI GitHub atas graph baru wajib lulus setelah review/push; CI hijau sebelumnya memakai graph sebelumnya. **Staging ditunda atas arahan pengguna dan menjadi BLOCKER rilis.** Domain/provider image sebenarnya, proxy, izin volume UID1000, inventaris file lama, pemulihan backup dan penerimaan risiko OS/tooling belum dibuktikan/disetujui. Tidak ada deploy atau perubahan berkas upload pengguna.
+
+Referensi scanner resmi: [cakupan npm/dev](https://trivy.dev/docs/v0.76/guide/coverage/language/nodejs/), [filesystem scanner](https://trivy.dev/docs/v0.76/guide/references/configuration/cli/trivy_filesystem/).
