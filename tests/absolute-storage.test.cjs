@@ -1,0 +1,56 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { once } = require('node:events');
+const { test, after, mock } = require('node:test');
+const sharp = require('sharp');
+const { load, prisma, workspace, cleanup } = require('./support.cjs');
+fs.mkdirSync(path.join(workspace, 'app'));
+process.chdir(path.join(workspace, 'app'));
+process.env.UPLOAD_DIR = path.join(workspace, 'mounted-uploads');
+const app = load('app').default;
+const { hashApiKey } = load('utils/apiKey');
+let server;
+after(async () => {
+  if (server) await new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); });
+  cleanup();
+});
+
+test('absolute upload volume keeps public /uploads URLs and legacy files compatible', async () => {
+  const keyHash = await hashApiKey('fixture-key');
+  mock.method(prisma.apikey, 'findMany', async () => [{ keyHash, isActive: true, expiresAt: null }]);
+  const png = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#4588bb' } }).png().toBuffer();
+  mock.method(prisma.image, 'create', async ({ data }) => ({ id: 'fixture', ...data }));
+  server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const headers = { 'x-api-key': 'fixture-key' };
+  const body = new FormData();
+  body.append('image', new Blob([png], { type: 'image/png' }), 'photo.html');
+  const upload = await fetch(`${base}/images`, { method: 'POST', headers, body, signal: AbortSignal.timeout(3000) });
+  assert.equal(upload.status, 201);
+  const image = await upload.json();
+  assert.match(image.url, /^https:\/\/images.test\/uploads\/default\/[a-f0-9-]{36}\.webp$/);
+  const diskPath = path.resolve(image.path);
+  assert.equal(path.dirname(diskPath), path.join(process.env.UPLOAD_DIR, 'default'));
+  const download = await fetch(`${base}${new URL(image.url).pathname}`);
+  assert.equal(download.status, 200);
+  assert.equal(download.headers.get('content-type'), 'image/webp');
+  assert.equal((await sharp(Buffer.from(await download.arrayBuffer())).metadata()).format, 'webp');
+  mock.method(prisma.image, 'findUnique', async () => image);
+  mock.method(prisma.image, 'delete', async () => image);
+  const remove = await fetch(`${base}/images?url=${encodeURIComponent(image.url)}`, { method: 'DELETE', headers });
+  assert.equal(remove.status, 200);
+  assert.equal(fs.existsSync(diskPath), false);
+
+  const legacy = path.join(process.env.UPLOAD_DIR, 'legacy.png');
+  fs.writeFileSync(legacy, png);
+  const legacyDownload = await fetch(`${base}/uploads/legacy.png`);
+  assert.equal(legacyDownload.status, 200);
+  assert.deepEqual(Buffer.from(await legacyDownload.arrayBuffer()), png);
+  const legacyImage = { ...image, path: legacy, url: 'https://images.test/uploads/legacy.png' };
+  mock.method(prisma.image, 'findUnique', async () => legacyImage);
+  const legacyRemove = await fetch(`${base}/images?url=${encodeURIComponent(legacyImage.url)}`, { method: 'DELETE', headers });
+  assert.equal(legacyRemove.status, 200);
+  assert.equal(fs.existsSync(legacy), false);
+});

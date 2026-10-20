@@ -9,8 +9,15 @@ pnpm-lock.yaml
 dist
 
 # Local environment & secrets
-.env
-.env.*
+.env*
+.dev.vars*
+.wrangler
+.next
+.open-next
+.npm
+.cache
+graft
+*.tsbuildinfo
 
 # VCS
 .git
@@ -26,8 +33,7 @@ dist
 prisma/generated
 
 # Uploads content (use volume, avoid sending large blobs)
-uploads/*
-!uploads/.gitkeep
+uploads
 
 # Docker
 Dockerfile.old

@@ -2,82 +2,105 @@ import express, { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import path from "path";
 import fs from "fs";
-import { upload } from "../middleware/upload";
+import sharp from "sharp";
+import { MAX_IMAGE_PIXELS, receiveImage, validateUploadFolder } from "../middleware/upload";
+import { UPLOAD_ROOT, ensureDirSync, generateFilename, resolveStoragePath } from "../utils/storage";
+import { BadRequestError } from "../error/responseError";
+import logger from "../utils/logger";
 
 const router = express.Router();
-const HOST = process.env.HOST || "http://localhost:4000";
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "uploads";
+const HOST = (process.env.HOST || "http://localhost:4000").replace(/\/$/, "");
 
-router.post("/", async (req: Request, res: Response) => {
-  const file = req.file;
-  if (process.env.NODE_ENV === "development" || process.env.DEBUG === "true") {
-    console.log("Uploaded file:", file);
-  }
-  
-  const { folder } = req.query as { folder?: string };
-  if (!file)
-    return res.status(400).json({
-      error:
-        "check the image, it might be unsupported file type, or you haven't uploaded a file",
-    });
-
-  const relativePath = path
-    .relative(process.cwd(), file.path)
-    .replace(/\\/g, "/");
-  const url = `${HOST}/${relativePath}`;
-
+router.post("/", validateUploadFolder, receiveImage, async (req: Request, res: Response) => {
+  const file = req.file!;
+  let encoded: Buffer;
   try {
+    const bytes = file.buffer;
+    const png = bytes.toString("hex", 0, 8) === "89504e470d0a1a0a";
+    const bitmap = (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+      || png
+      || (bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP");
+    if (!bitmap) throw new Error("Unsupported bitmap");
+    if (png) {
+      // libpng can decode pixels even when the final IEND chunk is truncated.
+      if (bytes.subarray(-12).toString("hex") !== "0000000049454e44ae426082") throw new Error("Incomplete PNG");
+      // APNG controls are not exposed in Sharp metadata; inspect bounded chunk headers.
+      for (let offset = 8; offset < bytes.length;) {
+        if (bytes.length - offset < 12) throw new Error("Incomplete PNG chunk");
+        const length = bytes.readUInt32BE(offset);
+        if (length > bytes.length - offset - 12) throw new Error("Incomplete PNG chunk");
+        if (bytes.toString("ascii", offset + 4, offset + 8) === "acTL") throw new Error("Animated PNG");
+        offset += length + 12;
+      }
+    }
+    const source = sharp(bytes, { failOn: "warning", limitInputPixels: MAX_IMAGE_PIXELS });
+    const metadata = await source.metadata();
+    if (!["jpeg", "png", "webp"].includes(metadata.format || "") || (metadata.pages || 1) > 1
+      || metadata.loop !== undefined || metadata.delay !== undefined) throw new Error("Unsupported bitmap");
+    encoded = await source.rotate().webp({ quality: 85 }).toBuffer();
+  } catch {
+    return res.status(415).json({ error: "Invalid or unsupported image" });
+  }
+
+  let createdPath: string | undefined;
+  try {
+    ensureDirSync(UPLOAD_ROOT);
+    const folder: string = res.locals.uploadFolder;
+    const destination = resolveStoragePath(path.join(UPLOAD_ROOT, folder));
+    ensureDirSync(destination);
+    const fileName = generateFilename();
+    const diskPath = resolveStoragePath(path.join(destination, fileName));
+    const handle = await fs.promises.open(diskPath, "wx");
+    createdPath = diskPath;
+    try { await handle.writeFile(encoded); } finally { await handle.close(); }
+    const storedPath = path.relative(process.cwd(), diskPath).replace(/\\/g, "/");
     const img = await prisma.image.create({
       data: {
         originalName: file.originalname,
-        fileName: file.filename,
-        mimeType: file.mimetype,
-        size: file.size,
-        path: relativePath,
-        url,
+        fileName,
+        mimeType: "image/webp",
+        size: encoded.length,
+        path: storedPath,
+        url: `${HOST}/uploads/${folder}/${fileName}`,
       },
     });
     return res.status(201).json(img);
-  } catch (err) {
-    try {
-      fs.unlinkSync(file.path);
-    } catch (e) {
-      console.error("File delete error:", e);
+  } catch (error) {
+    if (createdPath) {
+      try { await fs.promises.unlink(createdPath); } catch { logger.error("image.upload.cleanup.failed"); }
     }
-    console.error("DB insert error:", err);
+    if (error instanceof BadRequestError) return res.status(400).json({ error: "Invalid folder" });
+    logger.error("image.upload.failed");
     return res.status(500).json({ error: "internal server error" });
   }
 });
 
 router.get("/:id", async (req, res) => {
-  const { id } = req.params;
-  const img = await prisma.image.findUnique({ where: { id } });
-  if (!img) return res.status(404).json({ error: "not found" });
-  return res.json(img);
+  try {
+    const img = await prisma.image.findUnique({ where: { id: req.params.id } });
+    if (!img) return res.status(404).json({ error: "not found" });
+    return res.json(img);
+  } catch {
+    logger.error("image.metadata.failed");
+    return res.status(500).json({ error: "internal server error" });
+  }
 });
 
 router.delete("/", async (req, res) => {
   const { url } = req.query;
-  if (typeof url !== "string") {
-    return res.status(400).json({ error: "url must be a string" });
-  }
-
+  if (typeof url !== "string") return res.status(400).json({ error: "url must be a string" });
+  if (!url) return res.status(400).json({ error: "url is required" });
   try {
-    if (!url) {
-      return res.status(400).json({ error: "url is required" });
-    }
     const img = await prisma.image.findUnique({ where: { url } });
     if (!img) return res.status(404).json({ error: "not found" });
+    const diskPath = resolveStoragePath(img.path);
     await prisma.image.delete({ where: { url } });
-    const filePath = path.join(process.cwd(), img.path);
-    try {
-      fs.unlinkSync(filePath);
-    } catch (e) {
-      console.error("File delete error:", e);
+    try { await fs.promises.unlink(diskPath); } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") logger.error("image.delete.file.failed");
     }
     return res.json({ message: "success" });
-  } catch (err) {
-    console.error("delete error", err);
+  } catch {
+    logger.error("image.delete.failed");
     return res.status(500).json({ error: "internal server error" });
   }
 });

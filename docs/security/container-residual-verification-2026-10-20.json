@@ -1,0 +1,111 @@
+{
+  "dateWita": "2026-10-20",
+  "status": "Local source/build/runtime/scan verified; new-head GitHub CI pending; staging deferred is a release BLOCKER",
+  "sourceBaseCommit": "15d1fa98ea4fac5ccb0b58c73bf4ed9a429388ef",
+  "sourceProvenance": "Tracked Git archive plus frozen task-owned source/lock overlays. Backend user lock/node_modules excluded. No real env or credential files in context. Later documentation/policy metadata is not falsely claimed as built Git HEAD.",
+  "sourceManifest": {
+    "coordinatorPath": "residual-dependencies-20261020/source-snapshot.json",
+    "rawSha256": "c2a39df8f89dfd66de5b9d66a52f9e0d0859dac18cd6ea0774f8548686392429"
+  },
+  "input": {
+    "rawLockSha256": "3c669ed1c21a9c42f1dadf0a946d4a587fb2eef8229404841785ad0d37605844",
+    "canonicalLfLockSha256": "e4a4e2770b441ad26ca42ac342bbe2eeaf9914444d702a604b08e5a5ddbd7b3b",
+    "canonicalGitLockBlob": "0fad9d472bb4aee18fbe60d673e3327b907c2591",
+    "dockerfileCanonicalLfSha256": "5438e983295578b97402e3898c530a7ddc206accfe819f0506f4894e7aa6d05f",
+    "dockerignoreCanonicalLfSha256": "2ebedad9e77cb0270be457cbfa7325565fd661b6db17b77204767c84bf0d56bb"
+  },
+  "baseImage": "node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5",
+  "runnerImageId": "sha256:599739b0a6374f6e93ed23e67187d4851334136e6fd537e6fbaea0824d34123c",
+  "registryRepoDigests": [],
+  "archive": {
+    "coordinatorPath": "residual-dependencies-20261020/images/image-service-runner.tar",
+    "rawSha256": "3efe45e44ab3021ba0e082b6bcfc5e06b0f7b84857652466b719890043eb61bc",
+    "bytes": 388638720
+  },
+  "runtime": {
+    "service": "image-service",
+    "lockSha256": "e4a4e2770b441ad26ca42ac342bbe2eeaf9914444d702a604b08e5a5ddbd7b3b",
+    "node": "v24.22.0",
+    "uid": 1000,
+    "gid": 1000,
+    "capEff": "0000000000000000",
+    "nativeWebP": true,
+    "uploadWriteAndCleanup": true,
+    "absentModules": [
+      "ts-node-dev",
+      "braces"
+    ],
+    "http": {
+      "healthStatus": 200,
+      "rejectedV7Status": 400,
+      "commonJsUuidV4": true
+    },
+    "osProbes": {
+      "archiveTarLoadable": false,
+      "minizipOrHomedPackagesPresent": false,
+      "cliPaths": {
+        "/usr/bin/infocmp": true,
+        "/usr/bin/mount": true,
+        "/usr/bin/nsenter": true,
+        "/usr/bin/gzip": true
+      }
+    }
+  },
+  "runtimeProbe": {
+    "coordinatorPath": "residual-dependencies-20261020/check-residual-runtime.cjs",
+    "rawSha256": "935dad51710ebcba83b38a09f4f1aae70d4910a4a4dcbe4304f7551a5cc92db3"
+  },
+  "scannerImage": "aquasec/trivy@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222",
+  "advisoryDb": {
+    "Version": 2,
+    "NextUpdate": "2026-10-20T19:08:34.442427458Z",
+    "UpdatedAt": "2026-10-19T19:08:34.442427859Z",
+    "DownloadedAt": "2026-10-19T23:30:49.722513077Z"
+  },
+  "scan": {
+    "imageId": "sha256:599739b0a6374f6e93ed23e67187d4851334136e6fd537e6fbaea0824d34123c",
+    "createdAt": "2026-10-20T06:20:17.060997998Z",
+    "rawReportSha256": "22b70c883d2789c6aa2b5439b44a41e1f02674bd64af2ec0b4e5a16a3fd76d5c",
+    "counts": {
+      "debian": {
+        "LOW": 87,
+        "HIGH": 58,
+        "MEDIUM": 95,
+        "UNKNOWN": 1,
+        "CRITICAL": 1
+      },
+      "node-pkg": {}
+    }
+  },
+  "contextCanary": "Dockerfile/.dockerignore unchanged; tracked-only context excludes private files. Historical six-image canary/layer checks retained, not relabeled as new runner tests; no new six-archive rebuild/canary suite.",
+  "tests": {
+    "backend": null,
+    "imageService": "197 application + 9 gate on Windows native; 3 PostgreSQL; native Linux build/runtime, hosted CI Linux suite still required",
+    "dependencyGate": "9 existing controls and actual new full/production CLI PASS with original timestamps"
+  },
+  "releaseAcceptance": "Not accepted. Maintainer must review all residual OS/tooling risks before release and by 2026-11-02; staging deferred by user remains BLOCKER.",
+  "notChecked": [
+    "staging/production domains, cookies, proxy and volume permissions",
+    "new graph GitHub CI before push/review",
+    "full browser/two-service TLS scenarios not repeated for this residual graph",
+    "actual production backup/restore and legacy file inventory"
+  ],
+  "scannedInventory": {
+    "debian": {
+      "packageRows": 91,
+      "uniquePackages": 91
+    },
+    "node-pkg": {
+      "packageRows": 147,
+      "uniquePackages": 143
+    }
+  },
+  "cleanup": {
+    "coordinatorPath": "residual-dependencies-20261020/cleanup.json",
+    "rawSha256": "b56a018c250a4705403f61dfca530fd0b2419108ba0234efe5ed3c708600320b",
+    "ownedPostgresContainerPresent": false,
+    "ownedPostgresVolumePresent": false,
+    "customNetworksCreated": [],
+    "runnerImagesAndArchivesRetained": true
+  }
+}

@@ -1,79 +1,35 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import path from "path";
-import dotenv from "dotenv";
 import morgan from "morgan";
 import imagesRouter from "./routes/images";
-import { upload } from "./middleware/upload";
 import { apiKeyAuth } from "./middleware/apiKeyAuth";
 import generateApiKey from "./routes/generate";
 import logger from "./utils/logger";
 import { resolveCorsOrigins } from "./utils/corsOrigins";
-
-dotenv.config();
+import { UPLOAD_ROOT } from "./utils/storage";
 
 const app = express();
-
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "uploads";
-
-// ─── Logging ────────────────────────────────────────────────────────────────
-
-// Morgan HTTP request logging — streams to winston
-const morganFormat = process.env.NODE_ENV === "production" ? "combined" : "short";
-const morganStream = {
-  write: (message: string) => {
-    // Remove trailing newline from morgan
-    logger.info(message.trim(), { type: "http" });
-  },
-};
-app.use(morgan(morganFormat, { stream: morganStream }));
-
-// ─── Security ───────────────────────────────────────────────────────────────
-
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+app.use(morgan(":method :status :response-time ms", {
+  stream: { write: (message: string) => logger.info(message.trim(), { type: "http" }) },
 }));
-
-app.use(
-  cors({
-    origin: resolveCorsOrigins(process.env.CORS_ORIGIN),
-    credentials: true
-  })
-);
-
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+app.use(cors({ origin: resolveCorsOrigins(process.env.CORS_ORIGIN), credentials: true }));
 app.use(express.json());
-
-// ─── Static Files ───────────────────────────────────────────────────────────
-
-app.use(`/${UPLOAD_DIR}`, express.static(path.join(process.cwd(), UPLOAD_DIR), {
-  // The global CORS middleware already applies the allowlist to static files.
-}));
-
-// ─── Routes ─────────────────────────────────────────────────────────────────
-
-app.post("/images", apiKeyAuth, upload.single("image"), imagesRouter);
+app.use("/uploads", express.static(UPLOAD_ROOT));
 app.use("/images", apiKeyAuth, imagesRouter);
 app.use("/generate", generateApiKey);
+app.get("/", (_req, res) => res.send("Image Service OK"));
 
-app.get("/", (req, res) => res.send("Image Service OK"));
-
-// ─── Global Error Handler ───────────────────────────────────────────────────
-
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  logger.error("Unhandled error", {
-    error: err.message,
-    stack: err.stack,
-    method: req.method,
-    url: req.originalUrl,
-    ip: req.ip,
-  });
-
-  res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === "production"
-      ? "Internal server error"
-      : err.message,
-  });
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error("image.request.failed");
+  if (res.headersSent) { res.end(); return; }
+  const status = [400, 413, 415].includes(err.status) ? err.status : 500;
+  const message = err.type === "entity.too.large" ? "Request too large"
+    : err.type === "entity.parse.failed" ? "Invalid JSON"
+    : status === 500 ? "internal server error" : "Invalid request";
+  res.status(status).json({ error: message });
 });
 
 export default app;

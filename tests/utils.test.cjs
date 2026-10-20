@@ -43,12 +43,12 @@ test('storage creates nested directories and preserves existing files', () => {
   assert.equal(fs.readFileSync(sentinel, 'utf8'), 'keep');
 });
 
-for (const [name, extension] of [['photo.png', '.png'], ['photo.JPEG', '.JPEG'], ['no-extension', ''], ['../../photo.webp', '.webp']]) {
-  test(`generated filename keeps extension and drops original path: ${name}`, () => {
+for (const name of ['photo.png', 'photo.JPEG', 'no-extension', '../../photo.webp', 'active.html']) {
+  test(`generated filename is always a random WebP name: ${name}`, () => {
     const filename = generateFilename(name);
     assert.match(filename, /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}/);
-    assert.equal(filename.length, 36 + extension.length);
-    assert.equal(path.extname(filename), extension);
+    assert.equal(filename.length, 41);
+    assert.equal(path.extname(filename), '.webp');
     assert.equal(path.basename(filename), filename);
     assert.notEqual(generateFilename(name), filename);
   });

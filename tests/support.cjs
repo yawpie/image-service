@@ -14,7 +14,8 @@ Object.assign(process.env, {
   ADMIN_DATABASE_URL: 'postgresql://test:test@127.0.0.1:1/test',
   UPLOAD_DIR: 'uploads',
   MAX_FILE_SIZE: '1024',
-  ALLOWED_MIME: 'image/jpeg,image/png,image/webp,image/pjpeg',
+  MAX_IMAGE_PIXELS: '16',
+  IMAGE_SERVICE_PROVISIONING_KEY: 'fixture-provisioning-key',
   HOST: 'https://images.test',
   CORS_ORIGIN: '["https://dashboard.test"]',
   STATIC_ORIGIN: 'https://dashboard.test',
@@ -30,15 +31,17 @@ function replaceModule(id, exports) {
 
 const unexpected = async () => { throw new Error('Unexpected database call'); };
 const prisma = {
+  $transaction: unexpected,
   image: { create: unexpected, findUnique: unexpected, delete: unexpected },
   apikey: { create: unexpected, findMany: unexpected, count: unexpected, deleteMany: unexpected },
 };
 replaceModule(require.resolve('../dist/lib/prisma'), { prisma });
+const logs = [];
 replaceModule(require.resolve('../dist/utils/logger'), {
   __esModule: true,
-  default: { info() {}, error() {} },
+  default: { info(...args) { logs.push(args); }, error(...args) { logs.push(args); } },
 });
-const pg = { Pool: function () { throw new Error('Unexpected admin database call'); } };
+const pg = { Client: function () { throw new Error('Unexpected admin database call'); }, Pool: function () { throw new Error('Unexpected admin database call'); } };
 replaceModule(require.resolve('pg'), pg);
 
 function response() {
@@ -59,4 +62,4 @@ function cleanup() {
   fs.rmSync(workspace, { recursive: true, force: true });
 }
 
-module.exports = { load, prisma, pg, response, workspace, cleanup };
+module.exports = { load, prisma, pg, response, workspace, cleanup, logs };

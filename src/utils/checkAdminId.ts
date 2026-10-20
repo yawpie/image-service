@@ -1,24 +1,15 @@
-import { Pool } from "pg";
-import uuid from "uuid";
+import { Client } from "pg";
 
 export const validateAdminId = async (adminId?: string) => {
   if (!adminId) throw new Error("Admin ID is required");
-  const pool = new Pool({
-    connectionString: process.env.ADMIN_DATABASE_URL,
-  });
-
-  const client = await pool.connect();
+  const connectionString = process.env.ADMIN_DATABASE_URL;
+  if (!connectionString?.trim()) throw new Error("ADMIN_DATABASE_URL is required");
+  const client = new Client({ connectionString, connectionTimeoutMillis: 5000, query_timeout: 5000 });
   try {
-    // const adminIdUuid = uuid.parse(adminId);
-    const res = await client.query(
-      "SELECT admin_id FROM admin WHERE admin_id = $1",
-      [adminId]
-    );
-    return res.rows.length > 0;
-  } catch (error) {
-    console.error("Database query error:", error);
-    throw new Error("Database query error");
+    await client.connect();
+    const result = await client.query("SELECT admin_id FROM admin WHERE admin_id = $1 AND is_active = true", [adminId]);
+    return result.rows.length > 0;
   } finally {
-    client.release();
+    await client.end();
   }
 };

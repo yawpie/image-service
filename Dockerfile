@@ -1,68 +1,40 @@
-# Multi-stage production build for Node.js + TypeScript + Prisma
-ARG NODE_VERSION=20-slim
-
-# 1) Base (Debian-based)
+# syntax=docker/dockerfile:1
+ARG NODE_VERSION=24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
 FROM node:${NODE_VERSION} AS base
+RUN apt-get update \
+ && apt-get upgrade -y \
+ && apt-get install -y --no-install-recommends ca-certificates openssl libssl3 \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
-# install runtime/build libs (try libssl1.1, fallback to libssl3)
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-      ca-certificates \
-      openssl \
-      gnupg \
-      # try libssl1.1 first (available on bullseye), otherwise libssl3
- && (apt-get install -y --no-install-recommends libssl1.1 || apt-get install -y --no-install-recommends libssl3) \
- && rm -rf /var/lib/apt/lists/*
-
-# 2) Dev deps (used for building) -- runs npm ci and prisma generate
 FROM base AS deps_dev
 ENV CI=true
-WORKDIR /app
-COPY package*.json ./
+COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
-
-# copy prisma schema BEFORE generate
 COPY prisma ./prisma
-# Generate prisma client for same libc as base/runner (glibc)
-RUN npx prisma generate
+RUN ./node_modules/.bin/prisma generate
 
-# 3) Build TypeScript using dev deps (reuses node_modules from deps_dev)
 FROM base AS builder
-WORKDIR /app
 COPY --from=deps_dev /app/node_modules ./node_modules
-COPY package*.json ./
-COPY tsconfig.json ./tsconfig.json
+COPY package.json package-lock.json tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
-# 4) Prod deps (pruned)
 FROM base AS deps_prod
-WORKDIR /app
-COPY package*.json ./
+COPY package.json package-lock.json ./
 COPY --from=deps_dev /app/node_modules ./node_modules
 RUN npm prune --omit=dev --no-audit --no-fund
 
-# 5) Runtime image (Debian-based, small-ish)
-FROM node:${NODE_VERSION} AS runner
+FROM base AS runner
 ENV NODE_ENV=production
-WORKDIR /app
-
-# Ensure uploads dir exists and node user owns it
-RUN mkdir -p /app/uploads && chown -R node:node /app
-
-# ensure runtime has ssl libs too (same approach as base)
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates openssl \
- && (apt-get install -y --no-install-recommends libssl1.1 || apt-get install -y --no-install-recommends libssl3) \
- && rm -rf /var/lib/apt/lists/*
-
-COPY --chown=node:node --from=deps_prod /app/node_modules ./node_modules
-COPY --chown=node:node --from=builder  /app/dist        ./dist
-COPY --chown=node:node package*.json ./ 
-COPY --chown=node:node prisma ./prisma
-
-USER node
 ENV PORT=4000
+RUN mkdir -p /app/uploads && chown -R node:node /app \
+ && rm -rf /usr/local/lib/node_modules/npm /opt/yarn-* \
+ && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg
+COPY --chown=node:node --from=deps_prod /app/node_modules ./node_modules
+COPY --chown=node:node --from=builder /app/dist ./dist
+COPY --chown=node:node package.json package-lock.json ./
+COPY --chown=node:node prisma ./prisma
+USER node
 EXPOSE 4000
 CMD ["node", "dist/index.js"]

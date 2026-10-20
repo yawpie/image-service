@@ -1,54 +1,48 @@
 import multer from "multer";
-import { Request } from "express";
-import { generateDestination, generateFilename } from "../utils/storage";
-import dotenv from "dotenv";
+import { RequestHandler } from "express";
+import HttpError from "../error/responseError";
 
-dotenv.config();
-
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "uploads";
-export const MAX_FILE_SIZE = Number(process.env.MAX_FILE_SIZE || 10 * 1024 * 1024); // 10 MB
-// 'image/pjpeg' is a legacy MIME type used by older Internet Explorer versions; included for compatibility.
-const ALLOWED = (process.env.ALLOWED_MIME || "image/jpeg,image/png,image/webp,image/pjpeg").split(",");
-
-const storage = multer.diskStorage({
-  destination: (req: Request, file: Express.Multer.File, cb) => {
-    const { folder } = req.query as { folder?: string };
-    const dest = generateDestination(UPLOAD_DIR + (folder ? `/${folder}` : "/default"));
-    cb(null, dest);
-  },
-  filename: (req: Request, file: Express.Multer.File, cb) => {
-    cb(null, generateFilename(file.originalname));
-  },
-});
-
-export function fileFilter(req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
-  if (!ALLOWED.includes(file.mimetype)) {
-    return cb(null,false);
-  }
-  cb(null, true);
+export const MAX_FILE_SIZE = Number(process.env.MAX_FILE_SIZE || 10 * 1024 * 1024);
+export const MAX_IMAGE_PIXELS = Number(process.env.MAX_IMAGE_PIXELS || 25000000);
+for (const limit of [MAX_FILE_SIZE, MAX_IMAGE_PIXELS]) {
+  if (!Number.isSafeInteger(limit) || limit <= 0) throw new Error("Upload limits must be a positive integer");
 }
-// export function fileFilter(req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) {
-//   // log mimetype for debugging
-//   console.log("upload file mimetype:", file.mimetype, "originalname:", file.originalname);
 
-//   if (!ALLOWED.includes(file.mimetype)) {
-//     // pass a clear error so client can see why upload ditolak
-//     const err: any = new multer.MulterError("LIMIT_UNEXPECTED_FILE", file.fieldname);
-//     err.message = `Invalid file type: ${file.mimetype}`;
-//     console.log("upload file error:", err.message);
-    
-//     return cb(err, false);
-//     // const err = new Error(`Invalid file type: ${file.mimetype}`);
-//     // // optional: beri properti kode supaya mudah deteksi
-//     // (err as any).code = "INVALID_FILE_TYPE";
-//     // console.log("upload file rejected:", err.message);
-//     // return cb(null, false);
-//   }
-//   cb(null, true);
-// }
+export const validateUploadFolder: RequestHandler = (req, res, next) => {
+  const folder = req.query.folder ?? "default";
+  const query = req.originalUrl.split("?")[1] || "";
+  if (typeof folder !== "string" || !/^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*$/.test(folder) || /%(2f|5c)/i.test(query)) {
+    res.status(400).json({ error: "Invalid folder" });
+    return;
+  }
+  res.locals.uploadFolder = folder;
+  next();
+};
 
-export const upload = multer({
-  storage,
-  limits: { fileSize: MAX_FILE_SIZE },
-  fileFilter,
-});
+const parseImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE, files: 1, fields: 10, parts: 11, fieldSize: 16384 },
+  fileFilter: (_req, file, cb) => {
+    if (!["image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/webp"].includes(file.mimetype)) {
+      cb(new HttpError("Invalid or unsupported image", 415));
+      return;
+    }
+    cb(null, true);
+  },
+}).single("image");
+
+export const receiveImage: RequestHandler = (req, res, next) => {
+  parseImage(req, res, (error) => {
+    if (error) {
+      const oversized = error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE";
+      if (error instanceof HttpError) { res.status(415).json({ error: "Invalid or unsupported image" }); return; }
+      res.status(oversized ? 413 : 400).json({ error: oversized ? "File too large" : "Invalid multipart request" });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ error: "Image is required" });
+      return;
+    }
+    next();
+  });
+};

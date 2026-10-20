@@ -1,0 +1,106 @@
+name: Image service checks
+
+on:
+  pull_request:
+    branches: [production, main]
+  push:
+    branches: [production, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TRIVY_IMAGE: aquasec/trivy@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: security_test
+          POSTGRES_PASSWORD: ci-fixture-only
+          POSTGRES_DB: image_service_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U security_test -d image_service_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://security_test:ci-fixture-only@127.0.0.1:5432/image_service_ci?schema=public
+      SECURITY_TEST_DATABASE_URL: postgresql://security_test:ci-fixture-only@127.0.0.1:5432/image_service_ci?schema=public
+      ADMIN_DATABASE_URL: postgresql://security_test:ci-fixture-only@127.0.0.1:5432/image_admin_ci?schema=public
+      SECURITY_TEST_ADMIN_DATABASE_URL: postgresql://security_test:ci-fixture-only@127.0.0.1:5432/image_admin_ci?schema=public
+      IMAGE_SERVICE_PROVISIONING_KEY: ci-provisioning-fixture-only
+      PGPASSWORD: ci-fixture-only
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Scan checkout and change history for secrets locally
+        env:
+          GITLEAKS_BIN: ${{ runner.temp }}/gitleaks/gitleaks
+          SECURITY_SCAN_BASE: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+        shell: bash
+        run: |
+          scanner="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$scanner"
+          curl --fail --silent --show-error --location https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz --output "$scanner/gitleaks.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $scanner/gitleaks.tar.gz" | sha256sum --check
+          tar -xzf "$scanner/gitleaks.tar.gz" -C "$scanner" gitleaks
+          node --test scripts/check-secrets.check.cjs
+          node scripts/check-secrets.cjs
+      - run: npm ci --no-audit --no-fund
+      - name: Test bounded offline dependency policy
+        run: node --test scripts/check-dependency-audit.test.cjs
+      - name: Download public advisory DB without repository source
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-cache"
+          docker run --rm --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
+            --mount "type=bind,source=$RUNNER_TEMP/trivy-cache,target=/cache" --workdir /tmp \
+            "$TRIVY_IMAGE" --cache-dir /cache/trivy fs --download-db-only --disable-telemetry \
+            --config= --ignorefile= --ignore-policy= --scanners vuln
+      - name: Scan both canonical dependency scopes with network disabled
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-input" "$RUNNER_TEMP/dependency-reports"
+          cp package.json package-lock.json "$RUNNER_TEMP/trivy-input/"
+          for scope in full production; do
+            flags=()
+            if [ "$scope" = full ]; then flags+=(--include-dev-deps); fi
+            docker run --rm --user "$(id -u):$(id -g)" --network none --cap-drop ALL --security-opt no-new-privileges \
+              --mount "type=bind,source=$RUNNER_TEMP/trivy-input,target=/source,readonly" \
+              --mount "type=bind,source=$RUNNER_TEMP/trivy-cache,target=/cache" \
+              --mount "type=bind,source=$RUNNER_TEMP/dependency-reports,target=/reports" --workdir /tmp \
+              "$TRIVY_IMAGE" --cache-dir /cache/trivy fs --disable-telemetry --config= --ignorefile= --ignore-policy= \
+              --offline-scan --skip-db-update --skip-java-db-update --scanners vuln --pkg-types library \
+              --list-all-pkgs --format json --output "/reports/$scope.json" "${flags[@]}" /source
+          done
+          node scripts/check-dependency-audit.cjs docs/security/dependency-audit-policy.json \
+            "$RUNNER_TEMP/dependency-reports/full.json" "$RUNNER_TEMP/dependency-reports/production.json" \
+            "$RUNNER_TEMP/trivy-cache/trivy/db/metadata.json" package-lock.json
+      - run: npm run prisma:generate
+      - run: npx --no-install prisma validate
+      - run: npx --no-install prisma migrate deploy
+      - name: Create isolated admin database fixture
+        run: |
+          psql -h 127.0.0.1 -U security_test -d image_service_ci -v ON_ERROR_STOP=1 -c 'CREATE DATABASE image_admin_ci'
+          psql -h 127.0.0.1 -U security_test -d image_admin_ci -v ON_ERROR_STOP=1 -c 'CREATE TABLE admin (admin_id UUID PRIMARY KEY, username TEXT NOT NULL UNIQUE, hashed_password TEXT NOT NULL, is_active BOOLEAN NOT NULL DEFAULT true)'
+      - run: npm test
+      - run: npm run test:integration
+      - name: Build and inspect container runtime
+        run: |
+          docker build --tag smkn4-image-ci:check .
+          docker run --rm --network none --entrypoint node smkn4-image-ci:check -e "const a=require('node:assert/strict');a.notEqual(process.getuid(),0);a.equal(process.versions.node.split('.')[0],'24');require('node:fs').accessSync('uploads',2);require('sharp')({create:{width:1,height:1,channels:3,background:'white'}}).webp().toBuffer().catch(e=>{console.error(e);process.exitCode=1})"

@@ -1,0 +1,110 @@
+{
+  "dateWita": "2026-10-20",
+  "baseImage": "node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5",
+  "builderImageId": "sha256:53808a19e6c7501f37827692d843f5547c0a1c31244bef20cf41986663627117",
+  "runnerImageId": "sha256:176af845e32cdea7aa9832277a8bc480ba67d2aee484210cc77718b56da7c967",
+  "registryRepoDigests": [],
+  "sourceBaseCommit": "09201f6d5bf029cc7fb96ab167407952d53f3b89",
+  "buildOverlays": [
+    {
+      "path": ".dockerignore",
+      "sha256": "17f4090fc796e199e887b36e13102a839138add04e553c01aecdd03d98d99396"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "40e335e3df187b2f2c02676c5338bbb8f17f4cc277c9e3124fd672fc5126c48e"
+    },
+    {
+      "path": "Dockerfile",
+      "sha256": "ae7bee387512ebc74acead6965faa9c05150e6b974edb03639b9a45c1a8fe54f"
+    },
+    {
+      "path": "scripts/check-dependency-audit.cjs",
+      "sha256": "67045b7c631eb7c2d68a6707d7b2dbcd390f05d92aa936e3ba89903c1ac38a93"
+    },
+    {
+      "path": "scripts/check-dependency-audit.test.cjs",
+      "sha256": "1ca3d19d50898156c6cc90d538188bf1139fc9b971c982ec0f21bd76e19e7dd5"
+    },
+    {
+      "path": "scripts/check-secrets.check.cjs",
+      "sha256": "c4642dc5424d781304fbcbc6e358c0ca6038869f84ee66ceee769d043584c3ab"
+    },
+    {
+      "path": "scripts/check-secrets.cjs",
+      "sha256": "36f25d93e786824749ae67a3b851de7b434998bc898ee3badd1d1a26003ce89a"
+    }
+  ],
+  "rawBuildInputLockSha256": "3586365059f84f097adfa0a4fab929b36ea5c94c970d76f11dfe44bdba2c09f2",
+  "rawGitLockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
+  "canonicalLfLockSha256": "ecf6555fdf8c75df64d48844522f336e8eca173732907ca81070d2e5ee05d882",
+  "sourceManifestSha256": "8337ddc36e3a281d6ad88389ed2cf1776657e42aadaf4d49d5dfd766aa7f9cbc",
+  "sourceLimits": "Built snapshot and exact overlays are recorded. Subsequent offline dependency gate/policy/workflow, CI-action/secret self-test and documentation/report changes are verified separately; no claim that all final Git HEAD bytes were built. Product runtime/build/TypeScript bytes match the snapshot.",
+  "runtimeAssertions": {
+    "node": "v24.22.0",
+    "uid": 1000,
+    "gid": 1000,
+    "debian": true,
+    "packages": "gzip\t1.12-1\nlibssl3\t3.0.22-1~deb12u1\nlibsystemd0\t252.39-1~deb12u2\nlibudev1\t252.39-1~deb12u2\nmount\t2.38.1-5+deb12u3\nncurses-bin\t6.4-4\nopenssl\t3.0.22-1~deb12u1\nperl-base\t5.36.0-7+deb12u4\nutil-linux\t2.38.1-5+deb12u3\nzlib1g\t1:1.2.13.dfsg-1\n",
+    "components": {
+      "/usr/share/perl/5.36/Archive/Tar.pm": false,
+      "/usr/share/perl/5.36.0/Archive/Tar.pm": false,
+      "/usr/share/perl5/Archive/Tar.pm": false,
+      "/usr/bin/homectl": false,
+      "/usr/lib/systemd/systemd-homed": false,
+      "/usr/bin/infocmp": true,
+      "/usr/bin/tic": true,
+      "/usr/bin/mount": true,
+      "/usr/bin/nsenter": true,
+      "/usr/sbin/fsck": true,
+      "/usr/bin/gzip": true,
+      "/usr/bin/minizip": false,
+      "/usr/bin/miniunz": false
+    },
+    "globalNpm": false,
+    "globalNpx": false,
+    "writableDirectory": "/app/uploads",
+    "sharpWebpBytes": 68
+  },
+  "layerCanaryProof": [
+    {
+      "archive": "image-service-builder.tar",
+      "layers": 11,
+      "entries": 12380,
+      "canaryMatches": []
+    },
+    {
+      "archive": "image-service-runner.tar",
+      "layers": 12,
+      "entries": 10773,
+      "canaryMatches": []
+    }
+  ],
+  "smokeChecks": [
+    "HTML headers",
+    "local image optimizer and writable cache",
+    "private image denial",
+    "browser login and Secure HttpOnly cookies",
+    "verified profile",
+    "content/image upload WebP",
+    "content navigation",
+    "foreign mutation rejection",
+    "delete and file cleanup",
+    "logout revocation"
+  ],
+  "scanCounts": {
+    "debian": {
+      "LOW": 87,
+      "HIGH": 58,
+      "MEDIUM": 95,
+      "UNKNOWN": 1,
+      "CRITICAL": 1
+    },
+    "node-pkg": {
+      "MEDIUM": 1
+    }
+  },
+  "scanRawReportSha256": "5e032fc3894274f4ce46e66568e74a31115ce87bf3fb3ba1258d85d7463e378f",
+  "actualRemoteCI": "pending PR runs",
+  "stagingAndProviderValidation": "pending; no deployment/account/DNS changes"
+}
